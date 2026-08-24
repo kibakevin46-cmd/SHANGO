@@ -1,7 +1,7 @@
 <?php
-
 namespace App\Http\Controllers\Api;
 
+use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Maintenance;
 use Illuminate\Http\Request;
@@ -12,20 +12,30 @@ class MaintenanceController extends Controller
      * Liste des maintenances.
      */
     public function index()
-    {
-        $maintenances = Maintenance::with([
-            'equipement',
-            'incident',
-            'requester',
-            'validator',
-            'assignedTechnicien'
-        ])->latest()->get();
+{
+    $user = Auth::user();
 
-        return response()->json([
-            'message' => 'Liste des maintenances',
-            'data' => $maintenances,
-        ]);
+    $query = Maintenance::with([
+        'equipement',
+        'incident',
+        'requester',
+        'validator',
+        'assignedTechnicien'
+    ]);
+
+    // Le technicien ne voit que les maintenances
+    // qui lui sont affectées.
+    if ($user->role === 'technicien') {
+        $query->where('assigned_to', $user->id);
     }
+
+    $maintenances = $query->latest()->get();
+
+    return response()->json([
+        'message' => 'Liste des maintenances',
+        'data' => $maintenances,
+    ]);
+}
 
     /**
      * Enregistrer une nouvelle maintenance.
