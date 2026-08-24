@@ -1,10 +1,12 @@
 <?php
-
+use App\Http\Controllers\Api\MaintenanceController;
+use App\Http\Controllers\Api\IncidentController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\EquipementController;
+use App\Http\Controllers\Api\LocalisationController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
@@ -23,5 +25,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Gestion des équipements
         Route::apiResource('equipements', EquipementController::class);
+        Route::apiResource('localisations', LocalisationController::class);
+        Route::apiResource('incidents', IncidentController::class);
+        Route::apiResource('maintenances', MaintenanceController::class);
     });
 });
