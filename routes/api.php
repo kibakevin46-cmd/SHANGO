@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\InterventionController;
 use App\Http\Controllers\Api\MaintenanceController;
 use App\Http\Controllers\Api\IncidentController;
 use Illuminate\Support\Facades\Route;
@@ -15,7 +16,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // Routes réservées au Super Admin et à l'Admin
+    // Superadmin + Admin
     Route::middleware('role:superadmin,admin')->group(function () {
 
         Route::apiResource('users', UserController::class);
@@ -23,11 +24,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('equipements', EquipementController::class);
         Route::apiResource('localisations', LocalisationController::class);
         Route::apiResource('incidents', IncidentController::class);
+        Route::apiResource('maintenances', MaintenanceController::class);
     });
 
-    // Routes de maintenance accessibles au Super Admin,
-    // Admin et Technicien
+    // Superadmin + Admin + Technicien
     Route::middleware('role:superadmin,admin,technicien')->group(function () {
-        Route::apiResource('maintenances', MaintenanceController::class);
+
+        Route::apiResource('interventions', InterventionController::class);
     });
 });
