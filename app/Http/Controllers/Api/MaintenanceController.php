@@ -70,7 +70,7 @@ class MaintenanceController extends Controller
     /**
      * Afficher une maintenance.
      */
-    public function show(string $id)
+public function show(string $id)
 {
     $user = Auth::user();
 
@@ -81,19 +81,6 @@ class MaintenanceController extends Controller
         'validator',
         'assignedTechnicien'
     ])->findOrFail($id);
-
-    // Le technicien ne peut consulter
-    // que les maintenances qui lui sont affectées.
-    if ($user->role === 'technicien' && $maintenance->assigned_to !== $user->id) {
-        return response()->json([
-            'message' => 'Accès interdit. Cette maintenance ne vous est pas affectée.'
-        ], 403);
-    }
-
-    return response()->json([
-        'message' => 'Maintenance trouvée.',
-        'data' => $maintenance,
-    ]);
 }
 
     /**
