@@ -81,6 +81,22 @@ public function show(string $id)
         'validator',
         'assignedTechnicien'
     ])->findOrFail($id);
+
+    // Le technicien peut consulter uniquement
+    // les maintenances qui lui sont affectées.
+    if (
+        $user->role === 'technicien'
+        && (int) $maintenance->assigned_to !== (int) $user->id
+    ) {
+        return response()->json([
+            'message' => 'Accès interdit. Cette maintenance ne vous est pas affectée.'
+        ], 403);
+    }
+
+    return response()->json([
+        'message' => 'Maintenance trouvée.',
+        'data' => $maintenance,
+    ], 200);
 }
 
     /**

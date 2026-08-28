@@ -19,14 +19,14 @@ Route::post('/login', [AuthController::class, 'login']);
 
 
 // =====================================================
-// ROUTES PROTEGEES
+// ROUTES PROTÉGÉES
 // =====================================================
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    // -------------------------------------------------
-    // DECONNEXION
-    // -------------------------------------------------
+    // =================================================
+    // DÉCONNEXION
+    // =================================================
 
     Route::post('/logout', [AuthController::class, 'logout']);
 
@@ -37,25 +37,57 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('role:superadmin,admin')->group(function () {
 
-        // Utilisateurs
+        // -------------------------------------------------
+        // UTILISATEURS
+        // -------------------------------------------------
+
         Route::apiResource('users', UserController::class);
 
-        // Organisations
+
+        // -------------------------------------------------
+        // ORGANISATIONS
+        // -------------------------------------------------
+
         Route::apiResource('organizations', OrganizationController::class);
 
-        // Equipements
+
+        // -------------------------------------------------
+        // EQUIPEMENTS
+        // -------------------------------------------------
+
         Route::apiResource('equipements', EquipementController::class);
 
-        // Localisations
+
+        // -------------------------------------------------
+        // LOCALISATIONS
+        // -------------------------------------------------
+
         Route::apiResource('localisations', LocalisationController::class);
 
-        // Incidents
-        Route::apiResource('incidents', IncidentController::class);
+
+        // =================================================
+        // INCIDENTS - ADMINISTRATION
+        // =================================================
+
+        // Créer un incident
+        Route::post('/incidents', [IncidentController::class, 'store'])
+            ->name('incidents.store');
+
+        // Modifier complètement un incident
+        Route::put('/incidents/{incident}', [IncidentController::class, 'update'])
+            ->name('incidents.update');
+
+        // Modifier complètement un incident avec PATCH
+        Route::patch('/incidents/{incident}', [IncidentController::class, 'update']);
+
+        // Supprimer un incident
+        Route::delete('/incidents/{incident}', [IncidentController::class, 'destroy'])
+            ->name('incidents.destroy');
 
 
-        // -------------------------------------------------
-        // MAINTENANCES : ADMINISTRATION
-        // -------------------------------------------------
+        // =================================================
+        // MAINTENANCES - ADMINISTRATION
+        // =================================================
 
         // Créer une maintenance
         Route::post('/maintenances', [MaintenanceController::class, 'store'])
@@ -73,34 +105,47 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('role:superadmin,admin,technicien')->group(function () {
 
-        // -------------------------------------------------
-        // MAINTENANCES : CONSULTATION
-        // -------------------------------------------------
 
-        // Liste des maintenances
+        // =================================================
+        // INCIDENTS
+        // =================================================
+
+        // Consulter la liste des incidents
+        Route::get('/incidents', [IncidentController::class, 'index'])
+            ->name('incidents.index');
+
+        // Consulter un incident précis
+        Route::get('/incidents/{incident}', [IncidentController::class, 'show'])
+            ->name('incidents.show');
+
+        // Modifier uniquement le statut d'un incident
+        Route::patch('/incidents/{incident}/status', [IncidentController::class, 'updateStatus'])
+            ->name('incidents.updateStatus');
+
+
+        // =================================================
+        // MAINTENANCES
+        // =================================================
+
+        // Consulter la liste des maintenances
         Route::get('/maintenances', [MaintenanceController::class, 'index'])
             ->name('maintenances.index');
 
-        // Voir une maintenance
+        // Consulter une maintenance
         Route::get('/maintenances/{maintenance}', [MaintenanceController::class, 'show'])
             ->name('maintenances.show');
 
-
-        // -------------------------------------------------
-        // MAINTENANCES : MODIFICATION
-        // -------------------------------------------------
-
-        // Le technicien pourra modifier uniquement
-        // le statut d'une maintenance qui lui est affectée.
+        // Modifier une maintenance
         Route::put('/maintenances/{maintenance}', [MaintenanceController::class, 'update'])
             ->name('maintenances.update');
 
+        // Modifier une maintenance avec PATCH
         Route::patch('/maintenances/{maintenance}', [MaintenanceController::class, 'update']);
 
 
-        // -------------------------------------------------
+        // =================================================
         // INTERVENTIONS
-        // -------------------------------------------------
+        // =================================================
 
         Route::apiResource('interventions', InterventionController::class);
     });
