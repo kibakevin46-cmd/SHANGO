@@ -58,4 +58,4 @@ class Maintenance extends Model
     {
         return $this->hasMany(Intervention::class);
     }
-};
+}
