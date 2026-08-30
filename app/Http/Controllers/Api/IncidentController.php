@@ -289,13 +289,32 @@ class IncidentController extends Controller
      * - Admin
      */
     public function destroy(string $id)
-    {
-        $incident = Incident::findOrFail($id);
+{
+// Récupérer l'utilisateur connecté
+$user = request()->user();
 
-        $incident->delete();
+// Vérifier l'authentification
+if (!$user) {
+    return response()->json([
+        'message' => 'Utilisateur non authentifié.'
+    ], 401);
+}
 
-        return response()->json([
-            'message' => 'Incident supprimé avec succès.'
-        ]);
-    }
+// Seuls le superadmin et l'admin peuvent supprimer un incident
+if (!in_array($user->role, ['superadmin', 'admin'])) {
+    return response()->json([
+        'message' => 'Accès interdit. Les techniciens ne peuvent pas supprimer un incident.'
+    ], 403);
+}
+
+// Récupérer l'incident
+$incident = Incident::findOrFail($id);
+
+// Supprimer l'incident
+$incident->delete();
+
+return response()->json([
+    'message' => 'Incident supprimé avec succès.'
+]);
+   }
 }

@@ -9,7 +9,9 @@ use Illuminate\Http\Request;
 class InterventionController extends Controller
 {
     /**
-     * Liste des interventions.
+     * =====================================================
+     * LISTE DES INTERVENTIONS
+     * =====================================================
      */
     public function index()
     {
@@ -34,8 +36,11 @@ class InterventionController extends Controller
         ]);
     }
 
+
     /**
-     * Enregistrer une nouvelle intervention.
+     * =====================================================
+     * CREER UNE INTERVENTION
+     * =====================================================
      */
     public function store(Request $request)
     {
@@ -93,19 +98,25 @@ class InterventionController extends Controller
             ],
         ]);
 
+
         /*
-         * Si l'utilisateur connecté est un technicien,
-         * il ne peut pas créer une intervention pour
-         * un autre technicien.
+         * =================================================
+         * SECURITE TECHNICIEN
+         * =================================================
+         *
+         * Un technicien ne peut créer une intervention
+         * que pour lui-même.
          */
         if ($user->role === 'technicien') {
 
             if ((int) $validated['technicien_id'] !== (int) $user->id) {
+
                 return response()->json([
                     'message' => 'Accès interdit. Vous ne pouvez créer une intervention que pour vous-même.'
                 ], 403);
             }
         }
+
 
         $intervention = Intervention::create($validated);
 
@@ -119,8 +130,11 @@ class InterventionController extends Controller
         ], 201);
     }
 
+
     /**
-     * Afficher une intervention.
+     * =====================================================
+     * AFFICHER UNE INTERVENTION
+     * =====================================================
      */
     public function show(string $id)
     {
@@ -132,15 +146,25 @@ class InterventionController extends Controller
 
         $user = request()->user();
 
-        // Un technicien ne peut consulter que ses propres interventions.
+
+        /*
+         * =================================================
+         * SECURITE TECHNICIEN
+         * =================================================
+         *
+         * Le technicien ne peut consulter que les
+         * interventions qui lui sont affectées.
+         */
         if (
             $user->role === 'technicien' &&
-            $intervention->technicien_id !== $user->id
+            (int) $intervention->technicien_id !== (int) $user->id
         ) {
+
             return response()->json([
                 'message' => 'Accès interdit. Cette intervention ne vous est pas affectée.'
             ], 403);
         }
+
 
         return response()->json([
             'message' => 'Intervention trouvée.',
@@ -148,8 +172,11 @@ class InterventionController extends Controller
         ]);
     }
 
+
     /**
-     * Modifier une intervention.
+     * =====================================================
+     * MODIFIER UNE INTERVENTION
+     * =====================================================
      */
     public function update(Request $request, string $id)
     {
@@ -157,27 +184,52 @@ class InterventionController extends Controller
 
         $user = request()->user();
 
-        // Le technicien ne peut modifier que ses propres interventions.
+
+        /*
+         * =================================================
+         * SECURITE TECHNICIEN
+         * =================================================
+         *
+         * Un technicien peut modifier UNIQUEMENT
+         * une intervention qui lui appartient.
+         */
         if (
             $user->role === 'technicien' &&
-            $intervention->technicien_id !== $user->id
+            (int) $intervention->technicien_id !== (int) $user->id
         ) {
+
             return response()->json([
                 'message' => 'Accès interdit. Cette intervention ne vous est pas affectée.'
             ], 403);
         }
 
-        // Un technicien ne peut pas changer le technicien affecté.
+
+        /*
+         * =================================================
+         * SECURITE TECHNICIEN_ID
+         * =================================================
+         *
+         * Un technicien ne peut jamais modifier le
+         * technicien affecté à l'intervention.
+         */
         if (
             $user->role === 'technicien' &&
             $request->has('technicien_id')
         ) {
+
             return response()->json([
                 'message' => 'Accès interdit. Un technicien ne peut pas modifier le technicien affecté.'
             ], 403);
         }
 
+
+        /*
+         * =================================================
+         * VALIDATION
+         * =================================================
+         */
         $validated = $request->validate([
+
             'maintenance_id' => [
                 'sometimes',
                 'nullable',
@@ -230,49 +282,95 @@ class InterventionController extends Controller
             ],
         ]);
 
-        $intervention->update($validated);
 
         /*
+         * =================================================
+         * PROTECTION SUPPLEMENTAIRE
+         * =================================================
+         *
+         * Même si quelqu'un essaie d'envoyer
+         * technicien_id directement, ce champ n'est jamais
+         * accepté par la validation.
+         */
+
+
+        $intervention->update($validated);
+
+
+        /*
+         * =================================================
+         * MAINTENANCE AUTOMATIQUE
+         * =================================================
+         *
          * Si l'intervention est résolue,
-         * la maintenance correspondante passe automatiquement
+         * la maintenance passe automatiquement
          * à "terminee".
          */
         if (
             $intervention->status === 'resolu' &&
             $intervention->maintenance_id
         ) {
-            $intervention->maintenance->update([
-                'status' => 'terminee',
-            ]);
+
+            $maintenance = $intervention->maintenance;
+
+            if ($maintenance) {
+
+                $maintenance->update([
+                    'status' => 'terminee',
+                ]);
+            }
         }
+
+
+        /*
+         * Recharger les relations après modification.
+         */
+        $intervention->refresh();
+
+        $intervention->load([
+            'maintenance',
+            'equipement',
+            'technicien'
+        ]);
+
 
         return response()->json([
             'message' => 'Intervention modifiée avec succès.',
-            'data' => $intervention->load([
-                'maintenance',
-                'equipement',
-                'technicien'
-            ]),
+            'data' => $intervention,
         ]);
     }
 
+
     /**
-     * Supprimer une intervention.
+     * =====================================================
+     * SUPPRIMER UNE INTERVENTION
+     * =====================================================
      */
     public function destroy(string $id)
     {
         $user = request()->user();
 
-        // Le technicien ne peut pas supprimer une intervention.
+
+        /*
+         * =================================================
+         * SECURITE TECHNICIEN
+         * =================================================
+         *
+         * Un technicien ne peut jamais supprimer
+         * une intervention.
+         */
         if ($user->role === 'technicien') {
+
             return response()->json([
                 'message' => 'Accès interdit. Les techniciens ne peuvent pas supprimer une intervention.'
             ], 403);
         }
 
+
         $intervention = Intervention::findOrFail($id);
 
         $intervention->delete();
+
 
         return response()->json([
             'message' => 'Intervention supprimée avec succès.',

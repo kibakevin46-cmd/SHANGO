@@ -10,14 +10,31 @@ use Illuminate\Validation\Rule;
 class EquipementController extends Controller
 {
     /**
-     * Afficher la liste des équipements.
+     * =====================================================
+     * LISTE DES ÉQUIPEMENTS
+     * =====================================================
+     *
+     * Superadmin + Admin :
+     *      voient tous les équipements.
+     *
+     * Technicien :
+     *      voit uniquement les équipements qui lui sont affectés.
      */
     public function index()
     {
-        $equipements = Equipement::with([
+        $user = request()->user();
+
+        $query = Equipement::with([
             'organization',
             'technicien'
-        ])->get();
+        ]);
+
+        // Le technicien ne voit que ses équipements.
+        if ($user->role === 'technicien') {
+            $query->where('technicien_id', $user->id);
+        }
+
+        $equipements = $query->latest()->get();
 
         return response()->json([
             'message' => 'Liste des équipements',
@@ -25,8 +42,15 @@ class EquipementController extends Controller
         ]);
     }
 
+
     /**
-     * Créer un équipement.
+     * =====================================================
+     * CRÉER UN ÉQUIPEMENT
+     * =====================================================
+     *
+     * Seuls Superadmin et Admin peuvent créer.
+     *
+     * La route est déjà protégée dans api.php.
      */
     public function store(Request $request)
     {
@@ -81,8 +105,18 @@ class EquipementController extends Controller
         ], 201);
     }
 
+
     /**
-     * Afficher un équipement précis.
+     * =====================================================
+     * AFFICHER UN ÉQUIPEMENT
+     * =====================================================
+     *
+     * Superadmin + Admin :
+     *      peuvent consulter n'importe quel équipement.
+     *
+     * Technicien :
+     *      peut uniquement consulter un équipement
+     *      qui lui est affecté.
      */
     public function show(string $id)
     {
@@ -95,14 +129,33 @@ class EquipementController extends Controller
             'interventions'
         ])->findOrFail($id);
 
+        $user = request()->user();
+
+        // Vérification de sécurité pour le technicien.
+        if (
+            $user->role === 'technicien' &&
+            (int) $equipement->technicien_id !== (int) $user->id
+        ) {
+            return response()->json([
+                'message' => 'Accès interdit. Cet équipement ne vous est pas affecté.'
+            ], 403);
+        }
+
         return response()->json([
             'message' => 'Équipement trouvé.',
             'data' => $equipement
         ]);
     }
 
+
     /**
-     * Modifier un équipement.
+     * =====================================================
+     * MODIFIER UN ÉQUIPEMENT
+     * =====================================================
+     *
+     * Seuls Superadmin et Admin peuvent modifier.
+     *
+     * Les routes sont déjà protégées dans api.php.
      */
     public function update(Request $request, string $id)
     {
@@ -160,8 +213,13 @@ class EquipementController extends Controller
         ]);
     }
 
+
     /**
-     * Supprimer un équipement.
+     * =====================================================
+     * SUPPRIMER UN ÉQUIPEMENT
+     * =====================================================
+     *
+     * Seuls Superadmin et Admin peuvent supprimer.
      */
     public function destroy(string $id)
     {
