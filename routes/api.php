@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\LocalisationController;
 use App\Http\Controllers\Api\IncidentController;
 use App\Http\Controllers\Api\MaintenanceController;
 use App\Http\Controllers\Api\InterventionController;
+use App\Http\Controllers\Api\TelemetrieController;
 
 
 // =====================================================
@@ -23,6 +24,15 @@ use App\Http\Controllers\Api\InterventionController;
 // Connexion
 Route::post('/login', [AuthController::class, 'login'])
     ->name('login');
+
+
+// =====================================================
+// TÉLÉMÉTRIE - BOÎTIERS IoT
+// =====================================================
+
+// Réception des données envoyées par le boîtier IoT / Bridge
+Route::post('/telemetrie', [TelemetrieController::class, 'store'])
+    ->name('telemetrie.store');
 
 
 // =====================================================
@@ -224,6 +234,23 @@ Route::middleware('auth:sanctum')->group(function () {
         // Détail
         Route::get('/localisations/{localisation}', [LocalisationController::class, 'show'])
             ->name('localisations.show');
+    });
+
+
+    // =====================================================
+    // TÉLÉMÉTRIES - CONSULTATION
+    // SUPERADMIN + ADMIN + TECHNICIEN
+    // =====================================================
+
+    Route::middleware('role:superadmin,admin,technicien')->group(function () {
+
+        // Liste des télémétries
+        Route::get('/telemetries', [TelemetrieController::class, 'index'])
+            ->name('telemetries.index');
+
+        // Historique des télémétries d'un équipement
+        Route::get('/equipements/{equipement}/telemetries', [TelemetrieController::class, 'equipementTelemetries'])
+            ->name('equipements.telemetries');
     });
 
 });

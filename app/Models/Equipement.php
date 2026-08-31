@@ -19,6 +19,7 @@ class Equipement extends Model
         'technicien_id',
         'status',
         'installed_at',
+        'device_id',
     ];
 
     protected $casts = [
@@ -54,5 +55,10 @@ class Equipement extends Model
     public function interventions(): HasMany
     {
         return $this->hasMany(Intervention::class);
+    }
+
+    public function telemetries(): HasMany
+    {
+        return $this->hasMany(Telemetrie::class);
     }
 }
