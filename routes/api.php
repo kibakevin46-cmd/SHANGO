@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\IncidentController;
 use App\Http\Controllers\Api\MaintenanceController;
 use App\Http\Controllers\Api\InterventionController;
 use App\Http\Controllers\Api\TelemetrieController;
+use App\Http\Controllers\Api\AlerteController;
+use App\Http\Controllers\Api\CommandeController;
 
 
 // =====================================================
@@ -32,7 +34,28 @@ Route::post('/login', [AuthController::class, 'login'])
 
 // Réception des données envoyées par le boîtier IoT / Bridge
 Route::post('/telemetrie', [TelemetrieController::class, 'store'])
-    ->name('telemetrie.store');
+    ->name('telemetrie.store')
+    ->middleware('shango.api');
+
+
+// =====================================================
+// ALERTES - BOÎTIERS IoT
+// =====================================================
+
+// Réception des alertes envoyées par le bridge IoT
+Route::post('/alertes', [AlerteController::class, 'store'])
+    ->middleware('shango.api')
+    ->name('alertes.store');
+
+
+// =====================================================
+// COMMANDES - BOÎTIERS IoT
+// =====================================================
+
+// Réception d'une commande destinée au boîtier
+Route::post('/commande', [CommandeController::class, 'store'])
+    ->middleware('shango.api')
+    ->name('commande.store');
 
 
 // =====================================================
@@ -249,8 +272,29 @@ Route::middleware('auth:sanctum')->group(function () {
             ->name('telemetries.index');
 
         // Historique des télémétries d'un équipement
-        Route::get('/equipements/{equipement}/telemetries', [TelemetrieController::class, 'equipementTelemetries'])
-            ->name('equipements.telemetries');
+        Route::get(
+            '/equipements/{equipement}/telemetries',
+            [TelemetrieController::class, 'equipementTelemetries']
+        )->name('equipements.telemetries');
+    });
+
+
+    // =====================================================
+    // ALERTES - CONSULTATION
+    // SUPERADMIN + ADMIN + TECHNICIEN
+    // =====================================================
+
+    Route::middleware('role:superadmin,admin,technicien')->group(function () {
+
+        // Liste des alertes
+        Route::get('/alertes', [AlerteController::class, 'index'])
+            ->name('alertes.index');
+
+        // Historique des alertes d'un équipement
+        Route::get(
+            '/equipements/{equipement}/alertes',
+            [AlerteController::class, 'equipementAlertes']
+        )->name('equipements.alertes');
     });
 
 });

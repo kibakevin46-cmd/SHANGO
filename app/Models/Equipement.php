@@ -61,4 +61,9 @@ class Equipement extends Model
     {
         return $this->hasMany(Telemetrie::class);
     }
+
+    public function alertes(): HasMany
+{
+    return $this->hasMany(Alerte::class);
+}
 }
