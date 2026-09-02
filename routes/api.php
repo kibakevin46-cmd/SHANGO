@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\InterventionController;
 use App\Http\Controllers\Api\TelemetrieController;
 use App\Http\Controllers\Api\AlerteController;
 use App\Http\Controllers\Api\CommandeController;
+use App\Http\Controllers\Api\BatterieDiagnosticController;
 
 
 // =====================================================
@@ -55,6 +56,15 @@ Route::post('/alertes', [AlerteController::class, 'store'])
 // Envoi d'une commande depuis Laravel vers le Bridge IoT
 Route::post('/commande', [CommandeController::class, 'store'])
     ->name('commande.store');
+
+
+// =====================================================
+// DIAGNOSTIC BATTERIE - IA
+// =====================================================
+
+// Réception des données batterie pour le diagnostic IA
+Route::post('/batterie/diagnostic', [BatterieDiagnosticController::class, 'store'])
+    ->name('batterie.diagnostic');
 
 
 // =====================================================
