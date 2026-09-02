@@ -15,8 +15,9 @@ class BridgeService
         $apiKey = config('services.shango_bridge.api_key');
 
         return Http::withHeaders([
-            'X-API-KEY' => $apiKey,
+            'X-API-Key' => $apiKey,
             'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
         ])->post($url . '/commande', $commande);
     }
 }

@@ -26,6 +26,7 @@ class Alerte extends Model
         'gravite',
         'valeur',
         'horodatage',
+        'statut',
     ];
 
     /**

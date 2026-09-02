@@ -40,10 +40,10 @@ return [
     | SHANGO Bridge MQTT
     |--------------------------------------------------------------------------
     */
-
-    'shango_bridge' => [
-        'url' => env('SHANGO_BRIDGE_URL'),
-        'api_key' => env('SHANGO_BRIDGE_API_KEY'),
-    ],
+'shango_bridge' => [
+    'url' => env('SHANGO_BRIDGE_URL'),
+    'api_key' => env('SHANGO_BRIDGE_API_KEY'),
+],
+    
 
 ];

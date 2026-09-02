@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Commande;
 use App\Models\Equipement;
 use App\Services\BridgeService;
 use Illuminate\Http\Request;
@@ -16,32 +17,32 @@ class CommandeController extends Controller
      *
      * Endpoint :
      * POST /api/commande
-     *
-     * Exemple :
-     * {
-     *     "id_appareil": "SH-001",
-     *     "commande": "BLOQUER",
-     *     "emis_par": "systeme_payg",
-     *     "raison": "impaye"
-     * }
      */
     public function store(Request $request, BridgeService $bridgeService)
     {
-        // Validation des données reçues
+        // =================================================
+        // 1. VALIDATION
+        // =================================================
+
         $validated = $request->validate([
             'id_appareil' => 'required|string|max:255',
-            'commande' => 'required|string|max:50',
+
+            'commande' => 'required|string|in:BLOQUER,DEBLOQUER',
+
             'emis_par' => 'required|string|max:100',
+
             'raison' => 'nullable|string|max:255',
         ]);
 
-        // Recherche de l'équipement grâce au device_id
+        // =================================================
+        // 2. RECHERCHER L'ÉQUIPEMENT
+        // =================================================
+
         $equipement = Equipement::where(
             'device_id',
             $validated['id_appareil']
         )->first();
 
-        // Vérifier que le boîtier existe
         if (!$equipement) {
             return response()->json([
                 'success' => false,
@@ -50,7 +51,10 @@ class CommandeController extends Controller
             ], 404);
         }
 
-        // Préparer les données à envoyer au Bridge
+        // =================================================
+        // 3. PRÉPARER LA COMMANDE
+        // =================================================
+
         $commandeBridge = [
             'id_appareil' => $validated['id_appareil'],
             'commande' => $validated['commande'],
@@ -58,30 +62,126 @@ class CommandeController extends Controller
             'raison' => $validated['raison'] ?? null,
         ];
 
-        // Envoyer la commande au Bridge MQTT
-        $responseBridge = $bridgeService->envoyerCommande($commandeBridge);
+        // =================================================
+        // 4. ENVOYER AU BRIDGE
+        // =================================================
 
-        // Vérifier si le Bridge a accepté la commande
-        if (!$responseBridge->successful()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Impossible de transmettre la commande au Bridge MQTT.',
-                'bridge_status' => $responseBridge->status(),
-                'bridge_response' => $responseBridge->json(),
-            ], 502);
-        }
+        try {
+            $responseBridge = $bridgeService->envoyerCommande(
+                $commandeBridge
+            );
+        } catch (\Throwable $e) {
 
-        // Réponse finale
-        return response()->json([
-            'success' => true,
-            'message' => 'Commande reçue et transmise au Bridge MQTT avec succès.',
-            'data' => [
+            // Enregistrer l'échec
+            $commande = Commande::create([
                 'equipement_id' => $equipement->id,
                 'device_id' => $equipement->device_id,
                 'commande' => $validated['commande'],
                 'emis_par' => $validated['emis_par'],
                 'raison' => $validated['raison'] ?? null,
-            ],
+                'statut' => 'echouee',
+                'reponse_bridge' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Impossible de contacter le Bridge MQTT.',
+                'data' => $commande,
+            ], 502);
+        }
+
+        // =================================================
+        // 5. DÉTERMINER LE STATUT
+        // =================================================
+
+        $statut = $responseBridge->successful()
+            ? 'transmise'
+            : 'echouee';
+
+        // =================================================
+        // 6. ENREGISTRER LA COMMANDE
+        // =================================================
+
+        $commande = Commande::create([
+            'equipement_id' => $equipement->id,
+            'device_id' => $equipement->device_id,
+            'commande' => $validated['commande'],
+            'emis_par' => $validated['emis_par'],
+            'raison' => $validated['raison'] ?? null,
+            'statut' => $statut,
+            'reponse_bridge' => $responseBridge->body(),
+        ]);
+
+        // =================================================
+        // 7. SI LE BRIDGE REFUSE
+        // =================================================
+
+        if (!$responseBridge->successful()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Le Bridge MQTT a refusé la commande.',
+                'bridge_status' => $responseBridge->status(),
+                'data' => $commande,
+            ], 502);
+        }
+
+        // =================================================
+        // 8. RÉPONSE FINALE
+        // =================================================
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Commande reçue et transmise au Bridge MQTT avec succès.',
+            'data' => $commande,
         ], 201);
+    }
+
+
+    /**
+     * =====================================================
+     * LISTE DE TOUTES LES COMMANDES
+     * =====================================================
+     *
+     * Endpoint :
+     * GET /api/commandes
+     *
+     * Accessible aux utilisateurs authentifiés.
+     */
+    public function index()
+    {
+        $commandes = Commande::with('equipement')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Liste des commandes récupérée avec succès.',
+            'data' => $commandes,
+        ]);
+    }
+
+
+    /**
+     * =====================================================
+     * HISTORIQUE DES COMMANDES D'UN ÉQUIPEMENT
+     * =====================================================
+     *
+     * Endpoint :
+     * GET /api/equipements/{equipement}/commandes
+     */
+    public function equipementCommandes($equipementId)
+    {
+        $commandes = Commande::where(
+            'equipement_id',
+            $equipementId
+        )
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Historique des commandes récupéré avec succès.',
+            'data' => $commandes,
+        ]);
     }
 }

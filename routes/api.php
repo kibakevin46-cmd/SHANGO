@@ -42,7 +42,7 @@ Route::post('/telemetrie', [TelemetrieController::class, 'store'])
 // ALERTES - BOÎTIERS IoT
 // =====================================================
 
-// Réception des alertes envoyées par le bridge IoT
+// Réception des alertes envoyées par le Bridge IoT
 Route::post('/alertes', [AlerteController::class, 'store'])
     ->middleware('shango.api')
     ->name('alertes.store');
@@ -52,9 +52,8 @@ Route::post('/alertes', [AlerteController::class, 'store'])
 // COMMANDES - BOÎTIERS IoT
 // =====================================================
 
-// Réception d'une commande destinée au boîtier
+// Envoi d'une commande depuis Laravel vers le Bridge IoT
 Route::post('/commande', [CommandeController::class, 'store'])
-    ->middleware('shango.api')
     ->name('commande.store');
 
 
@@ -280,7 +279,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     // =====================================================
-    // ALERTES - CONSULTATION
+    // ALERTES
     // SUPERADMIN + ADMIN + TECHNICIEN
     // =====================================================
 
@@ -295,6 +294,31 @@ Route::middleware('auth:sanctum')->group(function () {
             '/equipements/{equipement}/alertes',
             [AlerteController::class, 'equipementAlertes']
         )->name('equipements.alertes');
+
+        // Modifier le statut d'une alerte
+        Route::patch(
+            '/alertes/{alerte}/status',
+            [AlerteController::class, 'updateStatus']
+        )->name('alertes.updateStatus');
+    });
+
+
+    // =====================================================
+    // COMMANDES - CONSULTATION
+    // SUPERADMIN + ADMIN + TECHNICIEN
+    // =====================================================
+
+    Route::middleware('role:superadmin,admin,technicien')->group(function () {
+
+        // Liste de toutes les commandes
+        Route::get('/commandes', [CommandeController::class, 'index'])
+            ->name('commandes.index');
+
+        // Historique des commandes d'un équipement
+        Route::get(
+            '/equipements/{equipement}/commandes',
+            [CommandeController::class, 'equipementCommandes']
+        )->name('equipements.commandes');
     });
 
 });

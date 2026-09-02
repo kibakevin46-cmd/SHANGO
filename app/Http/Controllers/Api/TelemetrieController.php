@@ -7,6 +7,7 @@ use App\Models\Equipement;
 use App\Models\Telemetrie;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use App\Services\AlerteDetectionService;
 
 class TelemetrieController extends Controller
 {
@@ -35,8 +36,10 @@ class TelemetrieController extends Controller
      *     "signal_gsm": -75
      * }
      */
-    public function store(Request $request)
-    {
+    public function store(
+        Request $request,
+        AlerteDetectionService $alerteDetectionService
+    ) {
         // =================================================
         // 1. VALIDATION DES DONNÉES
         // =================================================
@@ -109,7 +112,7 @@ class TelemetrieController extends Controller
             // Timestamp Unix → date Laravel
             'horodatage' => $horodatage,
 
-            // gps → latitude / longitude
+            // GPS
             'latitude' => $latitude,
             'longitude' => $longitude,
 
@@ -132,7 +135,13 @@ class TelemetrieController extends Controller
         $telemetrie = Telemetrie::create($data);
 
         // =================================================
-        // 8. RÉPONSE
+        // 8. DÉTECTION AUTOMATIQUE DES ALERTES
+        // =================================================
+
+        $alerteDetectionService->detecter($telemetrie);
+
+        // =================================================
+        // 9. RÉPONSE
         // =================================================
 
         return response()->json([
@@ -178,12 +187,20 @@ class TelemetrieController extends Controller
      */
     public function equipementTelemetries($equipementId)
     {
+        // =================================================
+        // 1. RÉCUPÉRER LES TÉLÉMÉTRIES
+        // =================================================
+
         $telemetries = Telemetrie::where(
             'equipement_id',
             $equipementId
         )
             ->orderBy('horodatage', 'desc')
             ->get();
+
+        // =================================================
+        // 2. RÉPONSE
+        // =================================================
 
         return response()->json([
             'success' => true,

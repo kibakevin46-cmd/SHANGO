@@ -7,6 +7,7 @@ use App\Models\Alerte;
 use App\Models\Equipement;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AlerteController extends Controller
 {
@@ -18,17 +19,11 @@ class AlerteController extends Controller
      * Endpoint :
      * POST /api/alertes
      *
-     * Utilisé par le bridge IoT.
+     * Utilisé par le Bridge IoT.
      *
-     * Format reçu :
+     * Chaque nouvelle alerte reçoit automatiquement :
      *
-     * {
-     *     "id_appareil": "SH-001",
-     *     "type_alerte": "CHOC",
-     *     "gravite": "ELEVEE",
-     *     "valeur": 8.2,
-     *     "horodatage": 1735689600
-     * }
+     * statut = nouvelle
      */
     public function store(Request $request)
     {
@@ -91,6 +86,9 @@ class AlerteController extends Controller
 
             'gravite' => $validated['gravite'],
 
+            // Statut initial automatique
+            'statut' => 'nouvelle',
+
             'valeur' => $validated['valeur'] ?? null,
 
             // Timestamp Unix → date Laravel
@@ -123,7 +121,8 @@ class AlerteController extends Controller
      * Endpoint :
      * GET /api/alertes
      *
-     * Accessible aux utilisateurs SHANGO authentifiés.
+     * Accessible aux utilisateurs authentifiés :
+     * superadmin / admin / technicien
      */
     public function index()
     {
@@ -149,6 +148,23 @@ class AlerteController extends Controller
      */
     public function equipementAlertes($equipementId)
     {
+        // =================================================
+        // 1. VÉRIFIER QUE L'ÉQUIPEMENT EXISTE
+        // =================================================
+
+        $equipement = Equipement::find($equipementId);
+
+        if (!$equipement) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Équipement introuvable.',
+            ], 404);
+        }
+
+        // =================================================
+        // 2. RÉCUPÉRER LES ALERTES
+        // =================================================
+
         $alertes = Alerte::where(
             'equipement_id',
             $equipementId
@@ -156,10 +172,74 @@ class AlerteController extends Controller
             ->orderBy('horodatage', 'desc')
             ->get();
 
+        // =================================================
+        // 3. RÉPONSE
+        // =================================================
+
         return response()->json([
             'success' => true,
             'message' => 'Historique des alertes récupéré avec succès.',
             'data' => $alertes,
+        ]);
+    }
+
+
+    /**
+     * =====================================================
+     * MODIFIER LE STATUT D'UNE ALERTE
+     * =====================================================
+     *
+     * Endpoint :
+     * PATCH /api/alertes/{alerte}/status
+     *
+     * Statuts autorisés :
+     *
+     * nouvelle
+     * en_cours
+     * resolue
+     * ignoree
+     */
+    public function updateStatus(Request $request, Alerte $alerte)
+    {
+        // =================================================
+        // 1. VALIDATION DU STATUT
+        // =================================================
+
+        $validated = $request->validate([
+            'statut' => [
+                'required',
+                'string',
+                Rule::in([
+                    'nouvelle',
+                    'en_cours',
+                    'resolue',
+                    'ignoree',
+                ]),
+            ],
+        ]);
+
+        // =================================================
+        // 2. MODIFIER LE STATUT
+        // =================================================
+
+        $alerte->update([
+            'statut' => $validated['statut'],
+        ]);
+
+        // =================================================
+        // 3. RÉCUPÉRER LES DONNÉES À JOUR
+        // =================================================
+
+        $alerte->refresh();
+
+        // =================================================
+        // 4. RÉPONSE
+        // =================================================
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Statut de l\'alerte mis à jour avec succès.',
+            'data' => $alerte,
         ]);
     }
 }
