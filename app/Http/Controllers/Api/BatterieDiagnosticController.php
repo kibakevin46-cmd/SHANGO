@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PredictionBatterie;
+use App\Services\BatterieIAService;
 use Illuminate\Http\Request;
 
 class BatterieDiagnosticController extends Controller
@@ -29,24 +30,39 @@ class BatterieDiagnosticController extends Controller
         $temperature = (float) $validated['temperature_c'];
         $dod = (float) $validated['dod_percent'];
 
-        // 3. Conversion de la tension du pack
-        // Alioth possède 4 cellules
-        $voltageCellule = $voltage / 4;
+        // 3. Utilisation du service IA
+        $serviceIA = new BatterieIAService();
 
-        // 4. Données qui seront envoyées au modèle IA
-        $donneesIA = [
-            $voltageCellule,
+        $donneesIA = $serviceIA->preparerDonnees(
+            $voltage,
             $current,
             $temperature,
-            $dod,
-        ];
+            $dod
+        );
 
-        // 5. Pour l'instant, on ne lance pas encore le vrai modèle IA.
-        // On vérifie simplement que les données sont correctement préparées.
+        // 4. Récupération de la tension par cellule
+        $voltageCellule = $donneesIA[0];
+
+        // 5. Enregistrement dans la base de données
+        // Les résultats IA restent null pour le moment.
+        $prediction = PredictionBatterie::create([
+            'device_id' => $deviceId,
+            'date_heure' => now(),
+            'voltage_v' => $voltage,
+            'current_a' => $current,
+            'temperature_c' => $temperature,
+            'dod_percent' => $dod,
+            'soh_pourcent' => null,
+            'capacite_ah' => null,
+            'rul_jours' => null,
+            'etat' => null,
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Données batterie reçues et préparées pour l’IA.',
+            'message' => 'Données batterie reçues et enregistrées avec succès.',
+            'prediction_id' => $prediction->id,
+
             'donnees_recues' => [
                 'device_id' => $deviceId,
                 'voltage_v' => $voltage,
@@ -54,8 +70,34 @@ class BatterieDiagnosticController extends Controller
                 'temperature_c' => $temperature,
                 'dod_percent' => $dod,
             ],
+
             'tension_par_cellule' => $voltageCellule,
+
             'donnees_envoyees_a_l_ia' => $donneesIA,
+
+            'resultats_ia' => [
+                'soh_pourcent' => null,
+                'capacite_ah' => null,
+                'rul_jours' => null,
+                'etat' => null,
+            ],
+        ], 200);
+    }
+
+    /**
+     * Historique des diagnostics d'une batterie
+     */
+    public function history(string $device_id)
+    {
+        $historique = PredictionBatterie::where('device_id', $device_id)
+            ->orderBy('date_heure', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'device_id' => $device_id,
+            'nombre_diagnostics' => $historique->count(),
+            'historique' => $historique,
         ], 200);
     }
 }

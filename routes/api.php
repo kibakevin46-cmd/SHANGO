@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\TelemetrieController;
 use App\Http\Controllers\Api\AlerteController;
 use App\Http\Controllers\Api\CommandeController;
 use App\Http\Controllers\Api\BatterieDiagnosticController;
+use App\Http\Controllers\Api\DashboardController;
 
 
 // =====================================================
@@ -50,21 +51,16 @@ Route::post('/alertes', [AlerteController::class, 'store'])
 
 
 // =====================================================
-// COMMANDES - BOÎTIERS IoT
-// =====================================================
-
-// Envoi d'une commande depuis Laravel vers le Bridge IoT
-Route::post('/commande', [CommandeController::class, 'store'])
-    ->name('commande.store');
-
-
-// =====================================================
 // DIAGNOSTIC BATTERIE - IA
 // =====================================================
 
 // Réception des données batterie pour le diagnostic IA
 Route::post('/batterie/diagnostic', [BatterieDiagnosticController::class, 'store'])
     ->name('batterie.diagnostic');
+
+// Historique des diagnostics d'une batterie
+Route::get('/batteries/{device_id}/diagnostics', [BatterieDiagnosticController::class, 'history'])
+    ->name('batteries.diagnostics.history');
 
 
 // =====================================================
@@ -79,6 +75,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/me', [AuthController::class, 'me'])
         ->name('me');
+
+
+    // =================================================
+    // DASHBOARD
+    // SUPERADMIN + ADMIN + TECHNICIEN
+    // =================================================
+
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard.index');
 
 
     // =================================================
@@ -289,7 +294,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     // =====================================================
-    // ALERTES
+    // ALERTES - CONSULTATION
     // SUPERADMIN + ADMIN + TECHNICIEN
     // =====================================================
 
@@ -314,11 +319,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     // =====================================================
-    // COMMANDES - CONSULTATION
+    // COMMANDES
     // SUPERADMIN + ADMIN + TECHNICIEN
     // =====================================================
 
     Route::middleware('role:superadmin,admin,technicien')->group(function () {
+
+        // Envoi d'une commande depuis Laravel vers le Bridge IoT
+        Route::post('/commande', [CommandeController::class, 'store'])
+            ->name('commande.store');
 
         // Liste de toutes les commandes
         Route::get('/commandes', [CommandeController::class, 'index'])
