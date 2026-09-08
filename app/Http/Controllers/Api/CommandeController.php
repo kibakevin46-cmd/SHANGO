@@ -52,7 +52,7 @@ class CommandeController extends Controller
         }
 
         // =================================================
-        // 3. PRÉPARER LA COMMANDE
+        // 3. PRÉPARER LA COMMANDE POUR LE BRIDGE
         // =================================================
 
         $commandeBridge = [
@@ -60,6 +60,9 @@ class CommandeController extends Controller
             'commande' => $validated['commande'],
             'emis_par' => $validated['emis_par'],
             'raison' => $validated['raison'] ?? null,
+
+            // Timestamp Unix généré automatiquement par Laravel
+            'horodatage' => time(),
         ];
 
         // =================================================
@@ -72,7 +75,7 @@ class CommandeController extends Controller
             );
         } catch (\Throwable $e) {
 
-            // Enregistrer l'échec
+            // Enregistrer l'échec de communication
             $commande = Commande::create([
                 'equipement_id' => $equipement->id,
                 'device_id' => $equipement->device_id,

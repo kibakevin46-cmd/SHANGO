@@ -13,12 +13,6 @@ class EquipementController extends Controller
      * =====================================================
      * LISTE DES ÉQUIPEMENTS
      * =====================================================
-     *
-     * Superadmin + Admin :
-     *      voient tous les équipements.
-     *
-     * Technicien :
-     *      voit uniquement les équipements qui lui sont affectés.
      */
     public function index()
     {
@@ -29,7 +23,7 @@ class EquipementController extends Controller
             'technicien'
         ]);
 
-        // Le technicien ne voit que ses équipements.
+        // Un technicien voit seulement ses équipements.
         if ($user->role === 'technicien') {
             $query->where('technicien_id', $user->id);
         }
@@ -48,24 +42,26 @@ class EquipementController extends Controller
      * CRÉER UN ÉQUIPEMENT
      * =====================================================
      *
-     * Seuls Superadmin et Admin peuvent créer.
-     *
-     * La route est déjà protégée dans api.php.
+     * Seuls les Admin et Superadmin peuvent créer.
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
+
+            // Organisation obligatoire
             'organization_id' => [
                 'required',
                 'exists:organizations,id'
             ],
 
+            // Type de l'équipement
             'type' => [
                 'required',
                 'string',
                 'max:255'
             ],
 
+            // Référence unique
             'reference' => [
                 'required',
                 'string',
@@ -73,11 +69,25 @@ class EquipementController extends Controller
                 'unique:equipements,reference'
             ],
 
-            'technicien_id' => [
-                'nullable',
-                'exists:users,id'
+            // Identifiant unique du boîtier IoT
+            'device_id' => [
+                'required',
+                'string',
+                'max:255',
+                'unique:equipements,device_id'
             ],
 
+            // Technicien facultatif
+            // Mais s'il est fourni, il doit être un technicien actif.
+            'technicien_id' => [
+                'nullable',
+                Rule::exists('users', 'id')->where(function ($query) {
+                    $query->where('role', 'technicien')
+                          ->where('status', 'actif');
+                })
+            ],
+
+            // Statut de l'équipement
             'status' => [
                 'required',
                 Rule::in([
@@ -88,12 +98,14 @@ class EquipementController extends Controller
                 ])
             ],
 
+            // Date d'installation facultative
             'installed_at' => [
                 'nullable',
                 'date'
             ],
         ]);
 
+        // Création de l'équipement
         $equipement = Equipement::create($validated);
 
         return response()->json([
@@ -110,13 +122,6 @@ class EquipementController extends Controller
      * =====================================================
      * AFFICHER UN ÉQUIPEMENT
      * =====================================================
-     *
-     * Superadmin + Admin :
-     *      peuvent consulter n'importe quel équipement.
-     *
-     * Technicien :
-     *      peut uniquement consulter un équipement
-     *      qui lui est affecté.
      */
     public function show(string $id)
     {
@@ -131,7 +136,7 @@ class EquipementController extends Controller
 
         $user = request()->user();
 
-        // Vérification de sécurité pour le technicien.
+        // Un technicien ne peut voir que son propre équipement.
         if (
             $user->role === 'technicien' &&
             (int) $equipement->technicien_id !== (int) $user->id
@@ -153,26 +158,28 @@ class EquipementController extends Controller
      * MODIFIER UN ÉQUIPEMENT
      * =====================================================
      *
-     * Seuls Superadmin et Admin peuvent modifier.
-     *
-     * Les routes sont déjà protégées dans api.php.
+     * PATCH permet de modifier seulement les champs envoyés.
      */
     public function update(Request $request, string $id)
     {
         $equipement = Equipement::findOrFail($id);
 
         $validated = $request->validate([
+
+            // Organisation
             'organization_id' => [
                 'sometimes',
                 'exists:organizations,id'
             ],
 
+            // Type
             'type' => [
                 'sometimes',
                 'string',
                 'max:255'
             ],
 
+            // Référence unique
             'reference' => [
                 'sometimes',
                 'string',
@@ -181,11 +188,26 @@ class EquipementController extends Controller
                     ->ignore($equipement->id)
             ],
 
-            'technicien_id' => [
-                'nullable',
-                'exists:users,id'
+            // Device ID unique
+            'device_id' => [
+                'sometimes',
+                'string',
+                'max:255',
+                Rule::unique('equipements', 'device_id')
+                    ->ignore($equipement->id)
             ],
 
+            // Technicien actif uniquement
+            'technicien_id' => [
+                'sometimes',
+                'nullable',
+                Rule::exists('users', 'id')->where(function ($query) {
+                    $query->where('role', 'technicien')
+                          ->where('status', 'actif');
+                })
+            ],
+
+            // Statut
             'status' => [
                 'sometimes',
                 Rule::in([
@@ -196,12 +218,15 @@ class EquipementController extends Controller
                 ])
             ],
 
+            // Date d'installation
             'installed_at' => [
+                'sometimes',
                 'nullable',
                 'date'
             ],
         ]);
 
+        // Mise à jour uniquement des champs envoyés.
         $equipement->update($validated);
 
         return response()->json([
@@ -218,8 +243,6 @@ class EquipementController extends Controller
      * =====================================================
      * SUPPRIMER UN ÉQUIPEMENT
      * =====================================================
-     *
-     * Seuls Superadmin et Admin peuvent supprimer.
      */
     public function destroy(string $id)
     {

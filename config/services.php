@@ -9,8 +9,8 @@ return [
     |
     | This file is for storing the credentials for third party services such
     | as Resend, Postmark, AWS, and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
+    | location for this type of service credentials, allowing packages to
+    | have a conventional file to locate the various service credentials.
     |
     */
 
@@ -39,11 +39,29 @@ return [
     |--------------------------------------------------------------------------
     | SHANGO Bridge MQTT
     |--------------------------------------------------------------------------
+    |
+    | Configuration utilisée pour envoyer les commandes Laravel
+    | vers le Bridge MQTT.
+    |
     */
-'shango_bridge' => [
-    'url' => env('SHANGO_BRIDGE_URL'),
-    'api_key' => env('SHANGO_BRIDGE_API_KEY'),
-],
-    
+
+    'shango_bridge' => [
+        'url' => env('SHANGO_BRIDGE_URL'),
+        'api_key' => env('SHANGO_BRIDGE_API_KEY'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | SHANGO IoT API
+    |--------------------------------------------------------------------------
+    |
+    | Clé utilisée pour authentifier les données envoyées par les
+    | équipements IoT vers Laravel (télémétrie et alertes).
+    |
+    */
+
+    'shango_iot' => [
+        'api_key' => env('SHANGO_IOT_API_KEY'),
+    ],
 
 ];
