@@ -10,11 +10,14 @@ class AlerteDetectionService
     /**
      * Détecter automatiquement les anomalies
      * à partir d'une télémétrie.
+     *
+     * Les types d'alertes générés respectent
+     * le contrat SHANGO V3.0.
      */
     public function detecter(Telemetrie $telemetrie): void
     {
         // =================================================
-        // 1. TEMPÉRATURE ÉLEVÉE
+        // 1. SURCHAUFFE
         // =================================================
 
         if (
@@ -23,7 +26,7 @@ class AlerteDetectionService
         ) {
             $this->creerAlerte(
                 $telemetrie,
-                'TEMPERATURE',
+                'SURCHAUFFE',
                 'ELEVEE',
                 $telemetrie->temperature
             );
@@ -42,38 +45,6 @@ class AlerteDetectionService
                 'TENSION_FAIBLE',
                 'MOYENNE',
                 $telemetrie->tension
-            );
-        }
-
-        // =================================================
-        // 3. COURANT ÉLEVÉ
-        // =================================================
-
-        if (
-            $telemetrie->courant !== null &&
-            $telemetrie->courant > 10
-        ) {
-            $this->creerAlerte(
-                $telemetrie,
-                'COURANT_ELEVE',
-                'ELEVEE',
-                $telemetrie->courant
-            );
-        }
-
-        // =================================================
-        // 4. SIGNAL GSM FAIBLE
-        // =================================================
-
-        if (
-            $telemetrie->signal_gsm !== null &&
-            $telemetrie->signal_gsm < -90
-        ) {
-            $this->creerAlerte(
-                $telemetrie,
-                'SIGNAL_GSM_FAIBLE',
-                'MOYENNE',
-                $telemetrie->signal_gsm
             );
         }
     }

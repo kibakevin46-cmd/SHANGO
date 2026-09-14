@@ -21,26 +21,56 @@ class AlerteController extends Controller
      *
      * Utilisé par le Bridge IoT.
      *
-     * Chaque nouvelle alerte reçoit automatiquement :
+     * Authentification :
+     * X-API-Key
      *
-     * statut = nouvelle
+     * Contrat SHANGO V3.0.
      */
     public function store(Request $request)
     {
         // =================================================
-        // 1. VALIDATION
+        // 1. VALIDATION DU PAYLOAD V3.0
         // =================================================
 
         $validated = $request->validate([
-            'id_appareil' => 'required|string|max:255',
+            'id_appareil' => [
+                'required',
+                'string',
+                'max:255',
+            ],
 
-            'type_alerte' => 'required|string|max:100',
+            'horodatage' => [
+                'required',
+                'integer',
+                'min:0',
+            ],
 
-            'gravite' => 'required|string|max:50',
+            'type_alerte' => [
+                'required',
+                'string',
+                Rule::in([
+                    'CHOC',
+                    'SURCHAUFFE',
+                    'TENSION_FAIBLE',
+                    'MOUVEMENT',
+                    'BOITIER_OUVERT',
+                ]),
+            ],
 
-            'valeur' => 'nullable|numeric',
+            'gravite' => [
+                'required',
+                'string',
+                Rule::in([
+                    'FAIBLE',
+                    'MOYENNE',
+                    'ELEVEE',
+                ]),
+            ],
 
-            'horodatage' => 'required|integer',
+            'valeur' => [
+                'nullable',
+                'numeric',
+            ],
         ]);
 
         // =================================================
@@ -78,20 +108,11 @@ class AlerteController extends Controller
 
         $data = [
             'equipement_id' => $equipement->id,
-
-            // id_appareil → device_id
             'device_id' => $validated['id_appareil'],
-
             'type_alerte' => $validated['type_alerte'],
-
             'gravite' => $validated['gravite'],
-
-            // Statut initial automatique
             'statut' => 'nouvelle',
-
             'valeur' => $validated['valeur'] ?? null,
-
-            // Timestamp Unix → date Laravel
             'horodatage' => $horodatage,
         ];
 
@@ -121,14 +142,36 @@ class AlerteController extends Controller
      * Endpoint :
      * GET /api/alertes
      *
-     * Accessible aux utilisateurs authentifiés :
-     * superadmin / admin / technicien
+     * Authentification :
+     * Sanctum
      */
     public function index()
     {
-        $alertes = Alerte::with('equipement')
+        $user = request()->user();
+
+        $query = Alerte::with('equipement');
+
+        // =================================================
+        // RESTRICTION POUR LE TECHNICIEN
+        // =================================================
+
+        if ($user->role === 'technicien') {
+            $query->whereHas('equipement', function ($q) use ($user) {
+                $q->where('technicien_id', $user->id);
+            });
+        }
+
+        // =================================================
+        // RÉCUPÉRER LES ALERTES
+        // =================================================
+
+        $alertes = $query
             ->orderBy('horodatage', 'desc')
             ->get();
+
+        // =================================================
+        // RÉPONSE
+        // =================================================
 
         return response()->json([
             'success' => true,
@@ -145,6 +188,9 @@ class AlerteController extends Controller
      *
      * Endpoint :
      * GET /api/equipements/{equipement}/alertes
+     *
+     * Authentification :
+     * Sanctum
      */
     public function equipementAlertes($equipementId)
     {
@@ -162,7 +208,22 @@ class AlerteController extends Controller
         }
 
         // =================================================
-        // 2. RÉCUPÉRER LES ALERTES
+        // 2. VÉRIFIER LES PERMISSIONS
+        // =================================================
+
+        $user = request()->user();
+
+        if (
+            $user->role === 'technicien' &&
+            (int) $equipement->technicien_id !== (int) $user->id
+        ) {
+            return response()->json([
+                'message' => 'Accès interdit. Cet équipement ne vous est pas affecté.'
+            ], 403);
+        }
+
+        // =================================================
+        // 3. RÉCUPÉRER LES ALERTES
         // =================================================
 
         $alertes = Alerte::where(
@@ -173,7 +234,7 @@ class AlerteController extends Controller
             ->get();
 
         // =================================================
-        // 3. RÉPONSE
+        // 4. RÉPONSE
         // =================================================
 
         return response()->json([
@@ -192,17 +253,39 @@ class AlerteController extends Controller
      * Endpoint :
      * PATCH /api/alertes/{alerte}/status
      *
-     * Statuts autorisés :
-     *
-     * nouvelle
-     * en_cours
-     * resolue
-     * ignoree
+     * Authentification :
+     * Sanctum
      */
     public function updateStatus(Request $request, Alerte $alerte)
     {
         // =================================================
-        // 1. VALIDATION DU STATUT
+        // 1. VÉRIFIER LES PERMISSIONS
+        // =================================================
+
+        $user = request()->user();
+
+        $equipement = Equipement::find(
+            $alerte->equipement_id
+        );
+
+        // =================================================
+        // SÉCURITÉ TECHNICIEN
+        // =================================================
+
+        if (
+            $user->role === 'technicien' &&
+            (
+                !$equipement ||
+                (int) $equipement->technicien_id !== (int) $user->id
+            )
+        ) {
+            return response()->json([
+                'message' => 'Accès interdit. Cette alerte concerne un équipement qui ne vous est pas affecté.'
+            ], 403);
+        }
+
+        // =================================================
+        // 2. VALIDATION DU STATUT
         // =================================================
 
         $validated = $request->validate([
@@ -219,7 +302,7 @@ class AlerteController extends Controller
         ]);
 
         // =================================================
-        // 2. MODIFIER LE STATUT
+        // 3. MODIFIER LE STATUT
         // =================================================
 
         $alerte->update([
@@ -227,13 +310,13 @@ class AlerteController extends Controller
         ]);
 
         // =================================================
-        // 3. RÉCUPÉRER LES DONNÉES À JOUR
+        // 4. RÉCUPÉRER LES DONNÉES À JOUR
         // =================================================
 
         $alerte->refresh();
 
         // =================================================
-        // 4. RÉPONSE
+        // 5. RÉPONSE
         // =================================================
 
         return response()->json([

@@ -20,11 +20,13 @@ class Equipement extends Model
         'status',
         'installed_at',
         'device_id',
+        'etat_kit',
     ];
 
     protected $casts = [
         'installed_at' => 'date',
         'status' => 'string',
+        'etat_kit' => 'string',
     ];
 
     public function organization(): BelongsTo
@@ -63,7 +65,7 @@ class Equipement extends Model
     }
 
     public function alertes(): HasMany
-{
-    return $this->hasMany(Alerte::class);
-}
+    {
+        return $this->hasMany(Alerte::class);
+    }
 }

@@ -5,62 +5,77 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Equipement;
 use App\Models\Telemetrie;
-use Illuminate\Http\Request;
-use Carbon\Carbon;
 use App\Services\AlerteDetectionService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class TelemetrieController extends Controller
 {
     /**
-     * =====================================================
-     * ENREGISTRER UNE TÉLÉMÉTRIE
-     * =====================================================
+     * Enregistrer une télémétrie envoyée par un boîtier SHANGO.
      *
-     * Endpoint :
-     * POST /api/telemetrie
-     *
-     * Format reçu du bridge IoT :
-     *
-     * {
-     *     "id_appareil": "SH-001",
-     *     "horodatage": 1735689600,
-     *     "gps": {
-     *         "latitude": 12.36,
-     *         "longitude": -1.53
-     *     },
-     *     "tension": 12.8,
-     *     "courant": 2.1,
-     *     "temperature": 34.5,
-     *     "etat_relais": "MARCHE",
-     *     "statut_paiement": "OK",
-     *     "signal_gsm": -75
-     * }
+     * Contrat SHANGO V3.0.
      */
     public function store(
         Request $request,
         AlerteDetectionService $alerteDetectionService
     ) {
         // =================================================
-        // 1. VALIDATION DES DONNÉES
+        // 1. VALIDATION DU PAYLOAD V3.0
         // =================================================
 
         $validated = $request->validate([
-            'id_appareil' => 'required|string|max:255',
+            'id_appareil' => [
+                'required',
+                'string',
+                'max:255',
+            ],
 
-            'horodatage' => 'required|integer',
+            'horodatage' => [
+                'required',
+                'integer',
+                'min:0',
+            ],
 
-            'gps' => 'nullable|array',
-            'gps.latitude' => 'nullable|numeric|between:-90,90',
-            'gps.longitude' => 'nullable|numeric|between:-180,180',
+            'tension' => [
+                'nullable',
+                'numeric',
+            ],
 
-            'tension' => 'nullable|numeric',
-            'courant' => 'nullable|numeric',
-            'temperature' => 'nullable|numeric',
+            'courant' => [
+                'nullable',
+                'numeric',
+            ],
 
-            'etat_relais' => 'nullable|string|max:50',
-            'statut_paiement' => 'nullable|string|max:50',
+            'temperature' => [
+                'nullable',
+                'numeric',
+            ],
 
-            'signal_gsm' => 'nullable|integer',
+            'etat_kit' => [
+                'nullable',
+                'string',
+                Rule::in([
+                    'MARCHE',
+                    'BLOQUE',
+                ]),
+            ],
+
+            'statut_paiement' => [
+                'nullable',
+                'string',
+                Rule::in([
+                    'OK',
+                    'EN_RETARD',
+                    'BLOQUE',
+                ]),
+            ],
+
+            'signal_gsm' => [
+                'nullable',
+                'numeric',
+            ],
         ]);
 
         // =================================================
@@ -72,10 +87,6 @@ class TelemetrieController extends Controller
             $validated['id_appareil']
         )->first();
 
-        // =================================================
-        // 3. VÉRIFIER QUE L'ÉQUIPEMENT EXISTE
-        // =================================================
-
         if (!$equipement) {
             return response()->json([
                 'success' => false,
@@ -85,7 +96,7 @@ class TelemetrieController extends Controller
         }
 
         // =================================================
-        // 4. CONVERSION DE L'HORODATAGE UNIX
+        // 3. CONVERSION DU TIMESTAMP
         // =================================================
 
         $horodatage = Carbon::createFromTimestamp(
@@ -93,55 +104,41 @@ class TelemetrieController extends Controller
         );
 
         // =================================================
-        // 5. EXTRAIRE LES COORDONNÉES GPS
-        // =================================================
-
-        $latitude = $validated['gps']['latitude'] ?? null;
-        $longitude = $validated['gps']['longitude'] ?? null;
-
-        // =================================================
-        // 6. PRÉPARER LES DONNÉES POUR LA BASE
+        // 4. PRÉPARATION DE LA TÉLÉMÉTRIE
         // =================================================
 
         $data = [
             'equipement_id' => $equipement->id,
-
-            // id_appareil → device_id
             'device_id' => $validated['id_appareil'],
-
-            // Timestamp Unix → date Laravel
             'horodatage' => $horodatage,
 
-            // GPS
-            'latitude' => $latitude,
-            'longitude' => $longitude,
+            // Le GPS ne fait plus partie du payload V3.0.
+            // Les anciennes colonnes restent en base.
+            'latitude' => null,
+            'longitude' => null,
 
             'tension' => $validated['tension'] ?? null,
             'courant' => $validated['courant'] ?? null,
             'temperature' => $validated['temperature'] ?? null,
-
-            // etat_relais → etat_kit
-            'etat_kit' => $validated['etat_relais'] ?? null,
-
+            'etat_kit' => $validated['etat_kit'] ?? null,
             'statut_paiement' => $validated['statut_paiement'] ?? null,
-
             'signal_gsm' => $validated['signal_gsm'] ?? null,
         ];
 
         // =================================================
-        // 7. ENREGISTRER LA TÉLÉMÉTRIE
+        // 5. ENREGISTREMENT
         // =================================================
 
         $telemetrie = Telemetrie::create($data);
 
         // =================================================
-        // 8. DÉTECTION AUTOMATIQUE DES ALERTES
+        // 6. DÉTECTION AUTOMATIQUE DES ALERTES
         // =================================================
 
         $alerteDetectionService->detecter($telemetrie);
 
         // =================================================
-        // 9. RÉPONSE
+        // 7. RÉPONSE
         // =================================================
 
         return response()->json([
@@ -151,18 +148,24 @@ class TelemetrieController extends Controller
         ], 201);
     }
 
-
     /**
-     * =====================================================
-     * LISTE DES TÉLÉMÉTRIES
-     * =====================================================
-     *
-     * Endpoint :
-     * GET /api/telemetries
+     * Récupérer la liste des télémétries.
      */
     public function index()
     {
-        $telemetries = Telemetrie::with('equipement')
+        $user = request()->user();
+
+        $query = Telemetrie::with('equipement');
+
+        // Un technicien ne voit que les télémétries
+        // des équipements qui lui sont affectés.
+        if ($user->role === 'technicien') {
+            $query->whereHas('equipement', function ($q) use ($user) {
+                $q->where('technicien_id', $user->id);
+            });
+        }
+
+        $telemetries = $query
             ->orderBy('horodatage', 'desc')
             ->get();
 
@@ -173,23 +176,32 @@ class TelemetrieController extends Controller
         ]);
     }
 
-
     /**
-     * =====================================================
-     * HISTORIQUE DES TÉLÉMÉTRIES D'UN ÉQUIPEMENT
-     * =====================================================
-     *
-     * Endpoint :
-     * GET /api/equipements/{equipement}/telemetries
-     *
-     * Exemple :
-     * GET /api/equipements/1/telemetries
+     * Récupérer l'historique des télémétries
+     * d'un équipement.
      */
     public function equipementTelemetries($equipementId)
     {
-        // =================================================
-        // 1. RÉCUPÉRER LES TÉLÉMÉTRIES
-        // =================================================
+        $equipement = Equipement::find($equipementId);
+
+        if (!$equipement) {
+            return response()->json([
+                'message' => 'Ressource introuvable.'
+            ], 404);
+        }
+
+        $user = request()->user();
+
+        // Un technicien ne peut consulter que
+        // les équipements qui lui sont affectés.
+        if (
+            $user->role === 'technicien' &&
+            (int) $equipement->technicien_id !== (int) $user->id
+        ) {
+            return response()->json([
+                'message' => 'Accès interdit. Cet équipement ne vous est pas affecté.'
+            ], 403);
+        }
 
         $telemetries = Telemetrie::where(
             'equipement_id',
@@ -197,10 +209,6 @@ class TelemetrieController extends Controller
         )
             ->orderBy('horodatage', 'desc')
             ->get();
-
-        // =================================================
-        // 2. RÉPONSE
-        // =================================================
 
         return response()->json([
             'success' => true,

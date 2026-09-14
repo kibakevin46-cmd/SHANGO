@@ -10,27 +10,50 @@ use Illuminate\Http\Request;
 class BatterieDiagnosticController extends Controller
 {
     /**
-     * Diagnostic d'une batterie
+     * Enregistrer les données d'un diagnostic batterie
+     * et préparer les données destinées au modèle IA.
      */
     public function store(Request $request)
     {
         // 1. Validation des données reçues
         $validated = $request->validate([
-            'device_id' => 'required|string',
-            'voltage_v' => 'required|numeric',
-            'current_a' => 'required|numeric',
-            'temperature_c' => 'required|numeric',
-            'dod_percent' => 'required|numeric|min:0|max:100',
+            'device_id' => [
+                'required',
+                'string',
+                'max:191',
+            ],
+
+            'voltage_v' => [
+                'required',
+                'numeric',
+            ],
+
+            'current_a' => [
+                'required',
+                'numeric',
+            ],
+
+            'temperature_c' => [
+                'required',
+                'numeric',
+            ],
+
+            'dod_percent' => [
+                'required',
+                'numeric',
+                'min:0',
+                'max:100',
+            ],
         ]);
 
-        // 2. Récupération des données
+        // 2. Récupération et conversion des données
         $deviceId = $validated['device_id'];
         $voltage = (float) $validated['voltage_v'];
         $current = (float) $validated['current_a'];
         $temperature = (float) $validated['temperature_c'];
         $dod = (float) $validated['dod_percent'];
 
-        // 3. Utilisation du service IA
+        // 3. Préparation des données pour l'IA
         $serviceIA = new BatterieIAService();
 
         $donneesIA = $serviceIA->preparerDonnees(
@@ -41,10 +64,15 @@ class BatterieDiagnosticController extends Controller
         );
 
         // 4. Récupération de la tension par cellule
+        // Le service IA effectue actuellement le calcul
+        // de la tension par cellule selon la configuration du projet.
         $voltageCellule = $donneesIA[0];
 
-        // 5. Enregistrement dans la base de données
-        // Les résultats IA restent null pour le moment.
+        // 5. Enregistrement du diagnostic en base de données
+        //
+        // Les résultats du modèle IA restent null pour le moment,
+        // en attendant l'intégration du modèle réel fourni par
+        // l'équipe IA.
         $prediction = PredictionBatterie::create([
             'device_id' => $deviceId,
             'date_heure' => now(),
@@ -52,15 +80,18 @@ class BatterieDiagnosticController extends Controller
             'current_a' => $current,
             'temperature_c' => $temperature,
             'dod_percent' => $dod,
+
             'soh_pourcent' => null,
             'capacite_ah' => null,
             'rul_jours' => null,
             'etat' => null,
         ]);
 
+        // 6. Réponse API
         return response()->json([
             'success' => true,
             'message' => 'Données batterie reçues et enregistrées avec succès.',
+
             'prediction_id' => $prediction->id,
 
             'donnees_recues' => [
@@ -85,11 +116,15 @@ class BatterieDiagnosticController extends Controller
     }
 
     /**
-     * Historique des diagnostics d'une batterie
+     * Récupérer l'historique des diagnostics
+     * d'une batterie à partir de son device_id.
      */
     public function history(string $device_id)
     {
-        $historique = PredictionBatterie::where('device_id', $device_id)
+        $historique = PredictionBatterie::where(
+            'device_id',
+            $device_id
+        )
             ->orderBy('date_heure', 'desc')
             ->get();
 

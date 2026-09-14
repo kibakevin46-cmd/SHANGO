@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\AlerteController;
 use App\Http\Controllers\Api\CommandeController;
 use App\Http\Controllers\Api\BatterieDiagnosticController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\StatusController;
 
 
 // =====================================================
@@ -48,6 +49,16 @@ Route::post('/telemetrie', [TelemetrieController::class, 'store'])
 Route::post('/alertes', [AlerteController::class, 'store'])
     ->middleware('shango.api')
     ->name('alertes.store');
+
+
+// =====================================================
+// STATUS - BOÎTIERS IoT
+// =====================================================
+
+// Réception du statut opérationnel envoyé par le Bridge IoT
+Route::post('/status', [StatusController::class, 'store'])
+    ->middleware('shango.api')
+    ->name('status.store');
 
 
 // =====================================================
@@ -88,11 +99,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('role:superadmin,admin,technicien')->group(function () {
 
-        // Diagnostic d'une batterie
         Route::post('/batterie/diagnostic', [BatterieDiagnosticController::class, 'store'])
             ->name('batterie.diagnostic');
 
-        // Historique des diagnostics d'une batterie
         Route::get('/batteries/{device_id}/diagnostics', [BatterieDiagnosticController::class, 'history'])
             ->name('batteries.diagnostics.history');
     });

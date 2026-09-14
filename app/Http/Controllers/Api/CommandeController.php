@@ -52,7 +52,23 @@ class CommandeController extends Controller
         }
 
         // =================================================
-        // 3. PRÉPARER LA COMMANDE POUR LE BRIDGE
+        // 3. VÉRIFIER LES DROITS DU TECHNICIEN
+        // =================================================
+
+        $user = request()->user();
+
+        if (
+            $user->role === 'technicien' &&
+            (int) $equipement->technicien_id !== (int) $user->id
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès interdit. Cet équipement ne vous est pas affecté.'
+            ], 403);
+        }
+
+        // =================================================
+        // 4. PRÉPARER LA COMMANDE POUR LE BRIDGE
         // =================================================
 
         $commandeBridge = [
@@ -60,13 +76,11 @@ class CommandeController extends Controller
             'commande' => $validated['commande'],
             'emis_par' => $validated['emis_par'],
             'raison' => $validated['raison'] ?? null,
-
-            // Timestamp Unix généré automatiquement par Laravel
             'horodatage' => time(),
         ];
 
         // =================================================
-        // 4. ENVOYER AU BRIDGE
+        // 5. ENVOYER AU BRIDGE
         // =================================================
 
         try {
@@ -75,7 +89,6 @@ class CommandeController extends Controller
             );
         } catch (\Throwable $e) {
 
-            // Enregistrer l'échec de communication
             $commande = Commande::create([
                 'equipement_id' => $equipement->id,
                 'device_id' => $equipement->device_id,
@@ -94,7 +107,7 @@ class CommandeController extends Controller
         }
 
         // =================================================
-        // 5. DÉTERMINER LE STATUT
+        // 6. DÉTERMINER LE STATUT
         // =================================================
 
         $statut = $responseBridge->successful()
@@ -102,7 +115,7 @@ class CommandeController extends Controller
             : 'echouee';
 
         // =================================================
-        // 6. ENREGISTRER LA COMMANDE
+        // 7. ENREGISTRER LA COMMANDE
         // =================================================
 
         $commande = Commande::create([
@@ -116,7 +129,7 @@ class CommandeController extends Controller
         ]);
 
         // =================================================
-        // 7. SI LE BRIDGE REFUSE
+        // 8. SI LE BRIDGE REFUSE LA COMMANDE
         // =================================================
 
         if (!$responseBridge->successful()) {
@@ -129,7 +142,7 @@ class CommandeController extends Controller
         }
 
         // =================================================
-        // 8. RÉPONSE FINALE
+        // 9. RÉPONSE FINALE
         // =================================================
 
         return response()->json([
@@ -139,20 +152,38 @@ class CommandeController extends Controller
         ], 201);
     }
 
-
     /**
      * =====================================================
-     * LISTE DE TOUTES LES COMMANDES
+     * LISTE DES COMMANDES
      * =====================================================
      *
      * Endpoint :
      * GET /api/commandes
      *
-     * Accessible aux utilisateurs authentifiés.
+     * Superadmin et admin :
+     * voient les commandes globales.
+     *
+     * Technicien :
+     * voit uniquement les commandes des équipements
+     * qui lui sont affectés.
      */
     public function index()
     {
-        $commandes = Commande::with('equipement')
+        $user = request()->user();
+
+        $query = Commande::with('equipement');
+
+        // =================================================
+        // FILTRAGE POUR LE TECHNICIEN
+        // =================================================
+
+        if ($user->role === 'technicien') {
+            $query->whereHas('equipement', function ($q) use ($user) {
+                $q->where('technicien_id', $user->id);
+            });
+        }
+
+        $commandes = $query
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -162,7 +193,6 @@ class CommandeController extends Controller
             'data' => $commandes,
         ]);
     }
-
 
     /**
      * =====================================================
@@ -174,6 +204,37 @@ class CommandeController extends Controller
      */
     public function equipementCommandes($equipementId)
     {
+        // =================================================
+        // 1. RECHERCHER L'ÉQUIPEMENT
+        // =================================================
+
+        $equipement = Equipement::find($equipementId);
+
+        if (!$equipement) {
+            return response()->json([
+                'message' => 'Ressource introuvable.'
+            ], 404);
+        }
+
+        // =================================================
+        // 2. VÉRIFIER LES DROITS DU TECHNICIEN
+        // =================================================
+
+        $user = request()->user();
+
+        if (
+            $user->role === 'technicien' &&
+            (int) $equipement->technicien_id !== (int) $user->id
+        ) {
+            return response()->json([
+                'message' => 'Accès interdit. Cet équipement ne vous est pas affecté.'
+            ], 403);
+        }
+
+        // =================================================
+        // 3. RÉCUPÉRER LES COMMANDES
+        // =================================================
+
         $commandes = Commande::where(
             'equipement_id',
             $equipementId
