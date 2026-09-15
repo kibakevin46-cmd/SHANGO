@@ -98,6 +98,15 @@ class EquipementController extends Controller
                 ])
             ],
 
+            // État du kit SHANGO V3.0
+            'etat_kit' => [
+                'nullable',
+                Rule::in([
+                    'MARCHE',
+                    'BLOQUE'
+                ])
+            ],
+
             // Date d'installation facultative
             'installed_at' => [
                 'nullable',
@@ -215,6 +224,16 @@ class EquipementController extends Controller
                     'en_panne',
                     'maintenance',
                     'hors_service'
+                ])
+            ],
+
+            // État du kit SHANGO V3.0
+            'etat_kit' => [
+                'sometimes',
+                'nullable',
+                Rule::in([
+                    'MARCHE',
+                    'BLOQUE'
                 ])
             ],
 

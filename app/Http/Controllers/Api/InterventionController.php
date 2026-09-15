@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Equipement;
 use App\Models\Intervention;
 use Illuminate\Http\Request;
 
@@ -20,7 +21,7 @@ class InterventionController extends Controller
         $query = Intervention::with([
             'maintenance',
             'equipement',
-            'technicien'
+            'technicien',
         ]);
 
         // Le technicien ne voit que ses propres interventions.
@@ -36,7 +37,6 @@ class InterventionController extends Controller
         ]);
     }
 
-
     /**
      * =====================================================
      * CREER UNE INTERVENTION
@@ -49,55 +49,54 @@ class InterventionController extends Controller
         $validated = $request->validate([
             'maintenance_id' => [
                 'nullable',
-                'exists:maintenances,id'
+                'exists:maintenances,id',
             ],
 
             'equipement_id' => [
                 'required',
-                'exists:equipements,id'
+                'exists:equipements,id',
             ],
 
             'technicien_id' => [
                 'required',
-                'exists:users,id'
+                'exists:users,id',
             ],
 
             'date_intervention' => [
                 'required',
-                'date'
+                'date',
             ],
 
             'diagnostic' => [
                 'nullable',
-                'string'
+                'string',
             ],
 
             'actions_realisees' => [
                 'nullable',
-                'string'
+                'string',
             ],
 
             'pieces_utilisees' => [
                 'nullable',
-                'array'
+                'array',
             ],
 
             'etat_equipement_apres' => [
                 'nullable',
-                'string'
+                'string',
             ],
 
             'commentaire' => [
                 'nullable',
-                'string'
+                'string',
             ],
 
             'status' => [
                 'nullable',
-                'in:en_attente,en_cours,resolu,a_suivre'
+                'in:en_attente,en_cours,resolu,a_suivre',
             ],
         ]);
-
 
         /*
          * =================================================
@@ -109,14 +108,37 @@ class InterventionController extends Controller
          */
         if ($user->role === 'technicien') {
 
-            if ((int) $validated['technicien_id'] !== (int) $user->id) {
-
+            if (
+                (int) $validated['technicien_id']
+                !== (int) $user->id
+            ) {
                 return response()->json([
-                    'message' => 'Accès interdit. Vous ne pouvez créer une intervention que pour vous-même.'
+                    'message' => 'Accès interdit. Vous ne pouvez créer une intervention que pour vous-même.',
+                ], 403);
+            }
+
+            /*
+             * =================================================
+             * SECURITE EQUIPEMENT
+             * =================================================
+             *
+             * Un technicien ne peut créer une intervention
+             * que sur un équipement qui lui est affecté.
+             */
+            $equipement = Equipement::find(
+                $validated['equipement_id']
+            );
+
+            if (
+                !$equipement ||
+                (int) $equipement->technicien_id
+                !== (int) $user->id
+            ) {
+                return response()->json([
+                    'message' => 'Accès interdit. Cet équipement ne vous est pas affecté.',
                 ], 403);
             }
         }
-
 
         $intervention = Intervention::create($validated);
 
@@ -125,11 +147,10 @@ class InterventionController extends Controller
             'data' => $intervention->load([
                 'maintenance',
                 'equipement',
-                'technicien'
+                'technicien',
             ]),
         ], 201);
     }
-
 
     /**
      * =====================================================
@@ -141,11 +162,10 @@ class InterventionController extends Controller
         $intervention = Intervention::with([
             'maintenance',
             'equipement',
-            'technicien'
+            'technicien',
         ])->findOrFail($id);
 
         $user = request()->user();
-
 
         /*
          * =================================================
@@ -157,21 +177,19 @@ class InterventionController extends Controller
          */
         if (
             $user->role === 'technicien' &&
-            (int) $intervention->technicien_id !== (int) $user->id
+            (int) $intervention->technicien_id
+            !== (int) $user->id
         ) {
-
             return response()->json([
-                'message' => 'Accès interdit. Cette intervention ne vous est pas affectée.'
+                'message' => 'Accès interdit. Cette intervention ne vous est pas affectée.',
             ], 403);
         }
-
 
         return response()->json([
             'message' => 'Intervention trouvée.',
             'data' => $intervention,
         ]);
     }
-
 
     /**
      * =====================================================
@@ -184,25 +202,23 @@ class InterventionController extends Controller
 
         $user = request()->user();
 
-
         /*
          * =================================================
          * SECURITE TECHNICIEN
          * =================================================
          *
-         * Un technicien peut modifier UNIQUEMENT
+         * Un technicien peut modifier uniquement
          * une intervention qui lui appartient.
          */
         if (
             $user->role === 'technicien' &&
-            (int) $intervention->technicien_id !== (int) $user->id
+            (int) $intervention->technicien_id
+            !== (int) $user->id
         ) {
-
             return response()->json([
-                'message' => 'Accès interdit. Cette intervention ne vous est pas affectée.'
+                'message' => 'Accès interdit. Cette intervention ne vous est pas affectée.',
             ], 403);
         }
-
 
         /*
          * =================================================
@@ -216,12 +232,10 @@ class InterventionController extends Controller
             $user->role === 'technicien' &&
             $request->has('technicien_id')
         ) {
-
             return response()->json([
-                'message' => 'Accès interdit. Un technicien ne peut pas modifier le technicien affecté.'
+                'message' => 'Accès interdit. Un technicien ne peut pas modifier le technicien affecté.',
             ], 403);
         }
-
 
         /*
          * =================================================
@@ -233,69 +247,89 @@ class InterventionController extends Controller
             'maintenance_id' => [
                 'sometimes',
                 'nullable',
-                'exists:maintenances,id'
+                'exists:maintenances,id',
             ],
 
             'equipement_id' => [
                 'sometimes',
-                'exists:equipements,id'
+                'exists:equipements,id',
             ],
 
             'date_intervention' => [
                 'sometimes',
-                'date'
+                'date',
             ],
 
             'diagnostic' => [
                 'sometimes',
                 'nullable',
-                'string'
+                'string',
             ],
 
             'actions_realisees' => [
                 'sometimes',
                 'nullable',
-                'string'
+                'string',
             ],
 
             'pieces_utilisees' => [
                 'sometimes',
                 'nullable',
-                'array'
+                'array',
             ],
 
             'etat_equipement_apres' => [
                 'sometimes',
                 'nullable',
-                'string'
+                'string',
             ],
 
             'commentaire' => [
                 'sometimes',
                 'nullable',
-                'string'
+                'string',
             ],
 
             'status' => [
                 'sometimes',
-                'in:en_attente,en_cours,resolu,a_suivre'
+                'in:en_attente,en_cours,resolu,a_suivre',
             ],
         ]);
 
+        /*
+         * =================================================
+         * SECURITE EQUIPEMENT
+         * =================================================
+         *
+         * Si un technicien essaie de modifier
+         * l'équipement de l'intervention, le nouvel
+         * équipement doit également lui être affecté.
+         */
+        if (
+            $user->role === 'technicien' &&
+            array_key_exists('equipement_id', $validated)
+        ) {
+            $equipement = Equipement::find(
+                $validated['equipement_id']
+            );
+
+            if (
+                !$equipement ||
+                (int) $equipement->technicien_id
+                !== (int) $user->id
+            ) {
+                return response()->json([
+                    'message' => 'Accès interdit. Cet équipement ne vous est pas affecté.',
+                ], 403);
+            }
+        }
 
         /*
          * =================================================
-         * PROTECTION SUPPLEMENTAIRE
+         * MISE A JOUR
          * =================================================
-         *
-         * Même si quelqu'un essaie d'envoyer
-         * technicien_id directement, ce champ n'est jamais
-         * accepté par la validation.
          */
-
-
         $intervention->update($validated);
-
 
         /*
          * =================================================
@@ -310,17 +344,14 @@ class InterventionController extends Controller
             $intervention->status === 'resolu' &&
             $intervention->maintenance_id
         ) {
-
             $maintenance = $intervention->maintenance;
 
             if ($maintenance) {
-
                 $maintenance->update([
                     'status' => 'terminee',
                 ]);
             }
         }
-
 
         /*
          * Recharger les relations après modification.
@@ -330,16 +361,14 @@ class InterventionController extends Controller
         $intervention->load([
             'maintenance',
             'equipement',
-            'technicien'
+            'technicien',
         ]);
-
 
         return response()->json([
             'message' => 'Intervention modifiée avec succès.',
             'data' => $intervention,
         ]);
     }
-
 
     /**
      * =====================================================
@@ -350,7 +379,6 @@ class InterventionController extends Controller
     {
         $user = request()->user();
 
-
         /*
          * =================================================
          * SECURITE TECHNICIEN
@@ -360,17 +388,14 @@ class InterventionController extends Controller
          * une intervention.
          */
         if ($user->role === 'technicien') {
-
             return response()->json([
-                'message' => 'Accès interdit. Les techniciens ne peuvent pas supprimer une intervention.'
+                'message' => 'Accès interdit. Les techniciens ne peuvent pas supprimer une intervention.',
             ], 403);
         }
-
 
         $intervention = Intervention::findOrFail($id);
 
         $intervention->delete();
-
 
         return response()->json([
             'message' => 'Intervention supprimée avec succès.',
