@@ -16,6 +16,14 @@ class Equipement extends Model
         'organization_id',
         'type',
         'reference',
+        'nom',
+        'description',
+        'client_nom',
+        'client_numero',
+        'marque_modele',
+        'site',
+        'photo',
+        'perimetre_metres',
         'technicien_id',
         'status',
         'installed_at',
@@ -27,6 +35,7 @@ class Equipement extends Model
         'installed_at' => 'date',
         'status' => 'string',
         'etat_kit' => 'string',
+        'perimetre_metres' => 'decimal:2',
     ];
 
     public function organization(): BelongsTo

@@ -69,6 +69,60 @@ class EquipementController extends Controller
                 'unique:equipements,reference'
             ],
 
+            // Nom affiché de l'équipement
+            'nom' => [
+                'nullable',
+                'string',
+                'max:255'
+            ],
+
+            // Description
+            'description' => [
+                'nullable',
+                'string'
+            ],
+
+            // Informations client
+            'client_nom' => [
+                'nullable',
+                'string',
+                'max:255'
+            ],
+
+            'client_numero' => [
+                'nullable',
+                'string',
+                'max:30'
+            ],
+
+            // Marque / modèle
+            'marque_modele' => [
+                'nullable',
+                'string',
+                'max:255'
+            ],
+
+            // Site d'installation
+            'site' => [
+                'nullable',
+                'string',
+                'max:255'
+            ],
+
+            // Photo : URL ou chemin du fichier
+            'photo' => [
+                'nullable',
+                'string',
+                'max:255'
+            ],
+
+            // Périmètre de surveillance
+            'perimetre_metres' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
             // Identifiant unique du boîtier IoT
             'device_id' => [
                 'required',
@@ -195,6 +249,68 @@ class EquipementController extends Controller
                 'max:255',
                 Rule::unique('equipements', 'reference')
                     ->ignore($equipement->id)
+            ],
+
+            // Nom affiché
+            'nom' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:255'
+            ],
+
+            // Description
+            'description' => [
+                'sometimes',
+                'nullable',
+                'string'
+            ],
+
+            // Informations client
+            'client_nom' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:255'
+            ],
+
+            'client_numero' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:30'
+            ],
+
+            // Marque / modèle
+            'marque_modele' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:255'
+            ],
+
+            // Site
+            'site' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:255'
+            ],
+
+            // Photo : URL ou chemin
+            'photo' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:255'
+            ],
+
+            // Périmètre
+            'perimetre_metres' => [
+                'sometimes',
+                'nullable',
+                'numeric',
+                'min:0'
             ],
 
             // Device ID unique
