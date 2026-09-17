@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Equipement;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class EquipementController extends Controller
@@ -41,20 +42,18 @@ class EquipementController extends Controller
      * =====================================================
      * CRÉER UN ÉQUIPEMENT
      * =====================================================
-     *
-     * Seuls les Admin et Superadmin peuvent créer.
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
 
-            // Organisation obligatoire
+            // Organisation
             'organization_id' => [
                 'required',
                 'exists:organizations,id'
             ],
 
-            // Type de l'équipement
+            // Type
             'type' => [
                 'required',
                 'string',
@@ -69,20 +68,19 @@ class EquipementController extends Controller
                 'unique:equipements,reference'
             ],
 
-            // Nom affiché de l'équipement
+            // Informations générales
             'nom' => [
                 'nullable',
                 'string',
                 'max:255'
             ],
 
-            // Description
             'description' => [
                 'nullable',
                 'string'
             ],
 
-            // Informations client
+            // Client
             'client_nom' => [
                 'nullable',
                 'string',
@@ -102,28 +100,29 @@ class EquipementController extends Controller
                 'max:255'
             ],
 
-            // Site d'installation
+            // Site
             'site' => [
                 'nullable',
                 'string',
                 'max:255'
             ],
 
-            // Photo : URL ou chemin du fichier
+            // Vraie image
             'photo' => [
                 'nullable',
-                'string',
-                'max:255'
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120'
             ],
 
-            // Périmètre de surveillance
+            // Périmètre
             'perimetre_metres' => [
                 'nullable',
                 'numeric',
                 'min:0'
             ],
 
-            // Identifiant unique du boîtier IoT
+            // Device ID
             'device_id' => [
                 'required',
                 'string',
@@ -131,8 +130,7 @@ class EquipementController extends Controller
                 'unique:equipements,device_id'
             ],
 
-            // Technicien facultatif
-            // Mais s'il est fourni, il doit être un technicien actif.
+            // Technicien
             'technicien_id' => [
                 'nullable',
                 Rule::exists('users', 'id')->where(function ($query) {
@@ -141,7 +139,7 @@ class EquipementController extends Controller
                 })
             ],
 
-            // Statut de l'équipement
+            // Statut
             'status' => [
                 'required',
                 Rule::in([
@@ -152,7 +150,7 @@ class EquipementController extends Controller
                 ])
             ],
 
-            // État du kit SHANGO V3.0
+            // État du kit
             'etat_kit' => [
                 'nullable',
                 Rule::in([
@@ -161,14 +159,27 @@ class EquipementController extends Controller
                 ])
             ],
 
-            // Date d'installation facultative
+            // Date d'installation
             'installed_at' => [
                 'nullable',
                 'date'
             ],
         ]);
 
-        // Création de l'équipement
+        // =================================================
+        // UPLOAD DE LA PHOTO
+        // =================================================
+
+        if ($request->hasFile('photo')) {
+            $validated['photo'] = $request
+                ->file('photo')
+                ->store('equipements', 'public');
+        }
+
+        // =================================================
+        // CRÉATION
+        // =================================================
+
         $equipement = Equipement::create($validated);
 
         return response()->json([
@@ -220,8 +231,6 @@ class EquipementController extends Controller
      * =====================================================
      * MODIFIER UN ÉQUIPEMENT
      * =====================================================
-     *
-     * PATCH permet de modifier seulement les champs envoyés.
      */
     public function update(Request $request, string $id)
     {
@@ -242,7 +251,7 @@ class EquipementController extends Controller
                 'max:255'
             ],
 
-            // Référence unique
+            // Référence
             'reference' => [
                 'sometimes',
                 'string',
@@ -251,7 +260,7 @@ class EquipementController extends Controller
                     ->ignore($equipement->id)
             ],
 
-            // Nom affiché
+            // Informations générales
             'nom' => [
                 'sometimes',
                 'nullable',
@@ -259,14 +268,13 @@ class EquipementController extends Controller
                 'max:255'
             ],
 
-            // Description
             'description' => [
                 'sometimes',
                 'nullable',
                 'string'
             ],
 
-            // Informations client
+            // Client
             'client_nom' => [
                 'sometimes',
                 'nullable',
@@ -297,12 +305,13 @@ class EquipementController extends Controller
                 'max:255'
             ],
 
-            // Photo : URL ou chemin
+            // Nouvelle photo
             'photo' => [
                 'sometimes',
                 'nullable',
-                'string',
-                'max:255'
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120'
             ],
 
             // Périmètre
@@ -313,7 +322,7 @@ class EquipementController extends Controller
                 'min:0'
             ],
 
-            // Device ID unique
+            // Device ID
             'device_id' => [
                 'sometimes',
                 'string',
@@ -322,7 +331,7 @@ class EquipementController extends Controller
                     ->ignore($equipement->id)
             ],
 
-            // Technicien actif uniquement
+            // Technicien
             'technicien_id' => [
                 'sometimes',
                 'nullable',
@@ -343,7 +352,7 @@ class EquipementController extends Controller
                 ])
             ],
 
-            // État du kit SHANGO V3.0
+            // État du kit
             'etat_kit' => [
                 'sometimes',
                 'nullable',
@@ -361,7 +370,30 @@ class EquipementController extends Controller
             ],
         ]);
 
-        // Mise à jour uniquement des champs envoyés.
+        // =================================================
+        // GESTION DE LA NOUVELLE PHOTO
+        // =================================================
+
+        if ($request->hasFile('photo')) {
+
+            // Supprimer l'ancienne photo si elle existe
+            if (
+                $equipement->photo &&
+                Storage::disk('public')->exists($equipement->photo)
+            ) {
+                Storage::disk('public')->delete($equipement->photo);
+            }
+
+            // Enregistrer la nouvelle photo
+            $validated['photo'] = $request
+                ->file('photo')
+                ->store('equipements', 'public');
+        }
+
+        // =================================================
+        // MISE À JOUR
+        // =================================================
+
         $equipement->update($validated);
 
         return response()->json([
@@ -382,6 +414,14 @@ class EquipementController extends Controller
     public function destroy(string $id)
     {
         $equipement = Equipement::findOrFail($id);
+
+        // Supprimer également la photo associée
+        if (
+            $equipement->photo &&
+            Storage::disk('public')->exists($equipement->photo)
+        ) {
+            Storage::disk('public')->delete($equipement->photo);
+        }
 
         $equipement->delete();
 
