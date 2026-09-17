@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class OrganizationController extends Controller
 {
@@ -28,8 +29,26 @@ class OrganizationController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+
+            'code' => [
+                'nullable',
+                'string',
+                'max:50',
+                'unique:organizations,code',
+            ],
+
             'description' => 'nullable|string',
+
+            'email' => 'nullable|email|max:255',
+
+            'phone' => 'nullable|string|max:30',
+
             'address' => 'nullable|string|max:255',
+
+            'city' => 'nullable|string|max:255',
+
+            'country' => 'nullable|string|max:255',
+
             'status' => 'required|in:active,inactive',
         ]);
 
@@ -64,8 +83,28 @@ class OrganizationController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'address' => 'nullable|string|max:255',
+
+            'code' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:50',
+                Rule::unique('organizations', 'code')
+                    ->ignore($organization->id),
+            ],
+
+            'description' => 'sometimes|nullable|string',
+
+            'email' => 'sometimes|nullable|email|max:255',
+
+            'phone' => 'sometimes|nullable|string|max:30',
+
+            'address' => 'sometimes|nullable|string|max:255',
+
+            'city' => 'sometimes|nullable|string|max:255',
+
+            'country' => 'sometimes|nullable|string|max:255',
+
             'status' => 'sometimes|in:active,inactive',
         ]);
 
