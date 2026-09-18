@@ -6,16 +6,24 @@ use App\Http\Controllers\Controller;
 use App\Models\PredictionBatterie;
 use App\Services\BatterieIAService;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Throwable;
 
 class BatterieDiagnosticController extends Controller
 {
     /**
-     * Enregistrer les données d'un diagnostic batterie
-     * et préparer les données destinées au modèle IA.
+     * Enregistrer les données d'un diagnostic batterie,
+     * envoyer les données au modèle IA FastAPI,
+     * puis enregistrer les résultats de la prédiction.
      */
-    public function store(Request $request)
-    {
-        // 1. Validation des données reçues
+    public function store(
+        Request $request,
+        BatterieIAService $serviceIA
+    ): JsonResponse {
+        // ============================================================
+        // 1. VALIDATION DES DONNÉES REÇUES
+        // ============================================================
+
         $validated = $request->validate([
             'device_id' => [
                 'required',
@@ -46,15 +54,20 @@ class BatterieDiagnosticController extends Controller
             ],
         ]);
 
-        // 2. Récupération et conversion des données
-        $deviceId = $validated['device_id'];
+        // ============================================================
+        // 2. RÉCUPÉRATION ET CONVERSION DES DONNÉES
+        // ============================================================
+
+        $deviceId = trim($validated['device_id']);
+
         $voltage = (float) $validated['voltage_v'];
         $current = (float) $validated['current_a'];
         $temperature = (float) $validated['temperature_c'];
         $dod = (float) $validated['dod_percent'];
 
-        // 3. Préparation des données pour l'IA
-        $serviceIA = new BatterieIAService();
+        // ============================================================
+        // 3. PRÉPARATION DES DONNÉES POUR L'IA
+        // ============================================================
 
         $donneesIA = $serviceIA->preparerDonnees(
             $voltage,
@@ -63,36 +76,104 @@ class BatterieDiagnosticController extends Controller
             $dod
         );
 
-        // 4. Récupération de la tension par cellule
-        // Le service IA effectue actuellement le calcul
-        // de la tension par cellule selon la configuration du projet.
+        // La première valeur correspond à la tension par cellule.
         $voltageCellule = $donneesIA[0];
 
-        // 5. Enregistrement du diagnostic en base de données
-        //
-        // Les résultats du modèle IA restent null pour le moment,
-        // en attendant l'intégration du modèle réel fourni par
-        // l'équipe IA.
+        // ============================================================
+        // 4. APPEL DU MODÈLE IA FASTAPI
+        // ============================================================
+
+        try {
+            $resultatIA = $serviceIA->predire(
+                $deviceId,
+                $voltage,
+                $current,
+                $temperature,
+                $dod
+            );
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+
+                'message' => 'Impossible d\'obtenir le diagnostic IA.',
+
+                'erreur' => $e->getMessage(),
+
+                'donnees_recues' => [
+                    'device_id' => $deviceId,
+                    'voltage_v' => $voltage,
+                    'current_a' => $current,
+                    'temperature_c' => $temperature,
+                    'dod_percent' => $dod,
+                ],
+            ], 503);
+        }
+
+        // ============================================================
+        // 5. RÉCUPÉRATION DES RÉSULTATS IA
+        // ============================================================
+
+        $sohClass = $resultatIA['soh_class'] ?? null;
+
+        $sohClassId = isset($resultatIA['soh_class_id'])
+            ? (int) $resultatIA['soh_class_id']
+            : null;
+
+        $sohProbabilities = $resultatIA['soh_probabilities'] ?? null;
+
+        $confidence = isset($resultatIA['confidence'])
+            ? (float) $resultatIA['confidence']
+            : null;
+
+        $rulCycles = isset($resultatIA['rul_cycles'])
+            ? (int) $resultatIA['rul_cycles']
+            : null;
+
+        // ============================================================
+        // 6. ENREGISTREMENT EN BASE DE DONNÉES
+        // ============================================================
+
         $prediction = PredictionBatterie::create([
             'device_id' => $deviceId,
+
             'date_heure' => now(),
+
+            // Données reçues
             'voltage_v' => $voltage,
             'current_a' => $current,
             'temperature_c' => $temperature,
             'dod_percent' => $dod,
 
+            // Anciennes colonnes IA
+            // Elles restent null car le modèle actuel
+            // ne fournit pas directement ces informations.
             'soh_pourcent' => null,
             'capacite_ah' => null,
             'rul_jours' => null,
+
+            // Résultats réels du modèle IA
+            'soh_class' => $sohClass,
+            'soh_class_id' => $sohClassId,
+            'soh_probabilities' => $sohProbabilities,
+            'confidence' => $confidence,
+            'rul_cycles' => $rulCycles,
+
+            // État métier non défini pour le moment.
             'etat' => null,
         ]);
 
-        // 6. Réponse API
+        // ============================================================
+        // 7. RÉPONSE API
+        // ============================================================
+
         return response()->json([
             'success' => true,
-            'message' => 'Données batterie reçues et enregistrées avec succès.',
 
-            'prediction_id' => $prediction->id,
+            'message' =>
+                'Diagnostic batterie effectué avec succès.',
+
+            'prediction_id' =>
+                $prediction->id,
 
             'donnees_recues' => [
                 'device_id' => $deviceId,
@@ -102,15 +183,27 @@ class BatterieDiagnosticController extends Controller
                 'dod_percent' => $dod,
             ],
 
-            'tension_par_cellule' => $voltageCellule,
-
-            'donnees_envoyees_a_l_ia' => $donneesIA,
+            'donnees_envoyees_a_l_ia' => [
+                'device_id' => $deviceId,
+                'voltage_v' => $voltage,
+                'voltage_per_cell' => $voltageCellule,
+                'current_a' => $current,
+                'temperature_c' => $temperature,
+                'dod_percent' => $dod,
+            ],
 
             'resultats_ia' => [
-                'soh_pourcent' => null,
-                'capacite_ah' => null,
-                'rul_jours' => null,
-                'etat' => null,
+                'soh_class' => $sohClass,
+                'soh_class_id' => $sohClassId,
+                'soh_probabilities' => $sohProbabilities,
+                'confidence' => $confidence,
+                'rul_cycles' => $rulCycles,
+            ],
+
+            'prediction_enregistree' => [
+                'id' => $prediction->id,
+                'device_id' => $prediction->device_id,
+                'date_heure' => $prediction->date_heure,
             ],
         ], 200);
     }
@@ -119,7 +212,7 @@ class BatterieDiagnosticController extends Controller
      * Récupérer l'historique des diagnostics
      * d'une batterie à partir de son device_id.
      */
-    public function history(string $device_id)
+    public function history(string $device_id): JsonResponse
     {
         $historique = PredictionBatterie::where(
             'device_id',
@@ -130,9 +223,14 @@ class BatterieDiagnosticController extends Controller
 
         return response()->json([
             'success' => true,
+
             'device_id' => $device_id,
-            'nombre_diagnostics' => $historique->count(),
-            'historique' => $historique,
+
+            'nombre_diagnostics' =>
+                $historique->count(),
+
+            'historique' =>
+                $historique,
         ], 200);
     }
 }

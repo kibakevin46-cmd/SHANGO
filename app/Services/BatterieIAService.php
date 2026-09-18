@@ -2,8 +2,24 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
+
 class BatterieIAService
 {
+    /**
+     * URL de l'API FastAPI SHANGO AI.
+     */
+    protected string $apiUrl;
+
+    public function __construct()
+    {
+        $this->apiUrl = rtrim(
+            config('services.batterie_ia.url', 'http://127.0.0.1:8000'),
+            '/'
+        );
+    }
+
     /**
      * Prépare les données de batterie pour le modèle IA.
      *
@@ -31,19 +47,78 @@ class BatterieIAService
     }
 
     /**
-     * Prépare les données dans un format
-     * qui pourra être envoyé au futur service Python.
-     *
-     * Pour le moment, aucune requête Python n'est effectuée.
+     * Prépare les données dans le format attendu
+     * par l'API FastAPI.
      */
     public function preparerRequeteIA(
         string $deviceId,
-        array $donneesIA
+        float $voltage,
+        float $current,
+        float $temperature,
+        float $dod
     ): array {
         return [
             'device_id' => $deviceId,
-
-            'features' => $donneesIA,
+            'voltage_v' => $voltage,
+            'current_a' => $current,
+            'temperature_c' => $temperature,
+            'dod_percent' => $dod,
         ];
+    }
+
+    /**
+     * Envoie les données à FastAPI et récupère
+     * le résultat du modèle IA.
+     */
+    public function predire(
+        string $deviceId,
+        float $voltage,
+        float $current,
+        float $temperature,
+        float $dod
+    ): array {
+        $requete = $this->preparerRequeteIA(
+            $deviceId,
+            $voltage,
+            $current,
+            $temperature,
+            $dod
+        );
+
+        try {
+            $response = Http::timeout(10)
+                ->acceptJson()
+                ->post(
+                    $this->apiUrl . '/predict',
+                    $requete
+                );
+
+            if ($response->failed()) {
+                throw new RuntimeException(
+                    'L\'API FastAPI a retourné une erreur HTTP '
+                    . $response->status()
+                    . ' : '
+                    . $response->body()
+                );
+            }
+
+            $resultat = $response->json();
+
+            if (!is_array($resultat)) {
+                throw new RuntimeException(
+                    'La réponse de FastAPI est invalide.'
+                );
+            }
+
+            return $resultat;
+
+        } catch (\Throwable $e) {
+            throw new RuntimeException(
+                'Impossible de contacter l\'API SHANGO AI : '
+                . $e->getMessage(),
+                0,
+                $e
+            );
+        }
     }
 }
