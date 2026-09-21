@@ -39,6 +39,10 @@ Exposer le port Flask :
 """
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import json
 import logging
 import threading
