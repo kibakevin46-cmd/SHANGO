@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
+
 """
-SHANGO — Bridge MQTT <-> HTTP v2.4
+SHANGO — Bridge MQTT <-> HTTP v2.5
 Orange Summer Challenge 2026
 
 Architecture :
 
 1) MQTT -> HTTP
+
    ESP32
       ↓
-   MQTT broker
+   MQTT Broker
       ↓
-   Bridge
+   Bridge SHANGO
       ↓
    Laravel
 
    Topics écoutés :
+
        shango/+/telemetry -> POST /api/telemetrie
        shango/+/alert     -> POST /api/alertes
        shango/+/status    -> POST /api/status
 
+
 2) HTTP -> MQTT
+
    Laravel
       ↓
    POST /commande du Bridge
@@ -28,34 +33,52 @@ Architecture :
       ↓
    ESP32
 
+
 Installation :
-    pip install paho-mqtt requests flask
+
+    pip install paho-mqtt requests flask python-dotenv
+
 
 Lancement :
+
     python shango_bridge.py
 
+
 Exposer le port Flask :
+
     ngrok http 5000
 """
 
+
+# =====================================================
+# IMPORTS
+# =====================================================
+
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
 import json
 import logging
 import threading
 import time
+
 from datetime import datetime, timezone
+
+from dotenv import load_dotenv
 
 import requests
 import paho.mqtt.client as mqtt
+
 from flask import Flask, request, jsonify
 
 
 # =====================================================
-# CONFIGURATION
+# CHARGEMENT DU FICHIER .ENV
+# =====================================================
+
+load_dotenv()
+
+
+# =====================================================
+# CONFIGURATION MQTT
 # =====================================================
 
 MQTT_BROKER = os.getenv(
@@ -70,24 +93,30 @@ MQTT_PORT = int(
     )
 )
 
+# Identifiant unique du Bridge MQTT.
+#
+# Important :
+# Si deux clients utilisent le même Client ID,
+# le broker peut déconnecter l'un des deux.
+
 MQTT_CLIENT_ID = os.getenv(
     "SHANGO_BRIDGE_CLIENT_ID",
-    "shango-bridge"
+    "shango-bridge-kevin-001"
 )
 
 
 # =====================================================
-# LARAVEL
+# CONFIGURATION LARAVEL
 # =====================================================
 
 API_BASE_URL = os.getenv(
     "SHANGO_API_BASE_URL",
-    "http://localhost:8000/api"
+    "http://127.0.0.1:8080/api"
 )
 
-# IMPORTANT :
-# Cette variable doit contenir la même clé que
-# SHANGO_IOT_API_KEY dans le .env Laravel.
+# Cette clé doit correspondre à la clé
+# SHANGO_IOT_API_KEY utilisée par Laravel.
+
 API_TOKEN = os.getenv(
     "SHANGO_API_TOKEN",
     ""
@@ -134,10 +163,13 @@ HTTP_RETRY_BACKOFF_S = 2
 # =====================================================
 
 # Cette clé protège l'endpoint :
+
 # POST http://<bridge>:5000/commande
-#
-# Elle doit être configurée dans l'environnement
-# sous SHANGO_BRIDGE_API_KEY.
+
+# Elle doit correspondre à :
+
+# SHANGO_BRIDGE_API_KEY
+
 BRIDGE_API_KEY = os.getenv(
     "SHANGO_BRIDGE_API_KEY",
     ""
@@ -167,14 +199,17 @@ FLASK_PORT = int(
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-log = logging.getLogger("shango-bridge")
+log = logging.getLogger(
+    "shango-bridge"
+)
 
 
 # =====================================================
-# HTTP FORWARDING : MQTT -> LARAVEL
+# MQTT -> HTTP
+# ENVOI DES DONNÉES VERS LARAVEL
 # =====================================================
 
 def forward_to_laravel(
@@ -186,25 +221,29 @@ def forward_to_laravel(
     url = ENDPOINT_MAP.get(kind)
 
     if not url:
+
         log.warning(
             "Type de message inconnu '%s', ignoré",
             kind
         )
+
         return
 
 
     # =================================================
-    # HEADERS
+    # HEADERS HTTP
     # =================================================
 
     headers = {
         "Content-Type": "application/json",
-        "Accept": "application/json",
+        "Accept": "application/json"
     }
 
-    # Le middleware Laravel shango.api
-    # attend X-API-Key.
+
+    # Laravel attend X-API-Key.
+
     if API_TOKEN:
+
         headers["X-API-Key"] = API_TOKEN
 
 
@@ -219,7 +258,7 @@ def forward_to_laravel(
 
         try:
 
-            resp = requests.post(
+            response = requests.post(
                 url,
                 json=payload,
                 headers=headers,
@@ -231,14 +270,17 @@ def forward_to_laravel(
             # SUCCÈS
             # =========================================
 
-            if resp.status_code in (200, 201):
+            if response.status_code in (
+                200,
+                201
+            ):
 
                 log.info(
                     "[%s] %s -> %s OK (HTTP %d)",
                     id_appareil,
                     kind,
                     url,
-                    resp.status_code
+                    response.status_code
                 )
 
                 return
@@ -254,17 +296,19 @@ def forward_to_laravel(
                 id_appareil,
                 kind,
                 url,
-                resp.status_code,
+                response.status_code,
                 attempt,
                 HTTP_MAX_RETRIES
             )
 
 
-            # Afficher la réponse Laravel
-            # pour faciliter le diagnostic.
+            # =========================================
+            # AFFICHER LA RÉPONSE LARAVEL
+            # =========================================
+
             try:
 
-                response_data = resp.json()
+                response_data = response.json()
 
                 log.warning(
                     "[%s] Réponse Laravel : %s",
@@ -277,11 +321,11 @@ def forward_to_laravel(
                 log.warning(
                     "[%s] Réponse Laravel brute : %s",
                     id_appareil,
-                    resp.text[:500]
+                    response.text[:500]
                 )
 
 
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException as error:
 
             log.warning(
                 "[%s] %s -> %s échec réseau "
@@ -291,7 +335,7 @@ def forward_to_laravel(
                 url,
                 attempt,
                 HTTP_MAX_RETRIES,
-                e
+                error
             )
 
 
@@ -320,7 +364,7 @@ def forward_to_laravel(
 
 
 # =====================================================
-# PARSING TOPIC MQTT
+# PARSING DU TOPIC MQTT
 # =====================================================
 
 def parse_topic(topic: str):
@@ -335,13 +379,18 @@ def parse_topic(topic: str):
         len(parts) != 3
         or parts[0] != "shango"
     ):
+
         return None, None
 
-    return parts[1], parts[2]
+    return (
+        parts[1],
+        parts[2]
+    )
 
 
 # =====================================================
-# CALLBACK MQTT : CONNEXION
+# CALLBACK MQTT
+# CONNEXION
 # =====================================================
 
 def on_connect(
@@ -362,31 +411,42 @@ def on_connect(
 
 
         # =============================================
-        # ABONNEMENTS
+        # ABONNEMENTS MQTT
         # =============================================
 
-        client.subscribe([
-            (
-                TOPIC_TELEMETRY,
-                0
-            ),
-            (
-                TOPIC_ALERT,
-                0
-            ),
-            (
-                TOPIC_STATUS,
-                0
-            ),
-        ])
-
-
-        log.info(
-            "Abonné à : %s | %s | %s",
-            TOPIC_TELEMETRY,
-            TOPIC_ALERT,
-            TOPIC_STATUS
+        result, message_id = client.subscribe(
+            [
+                (
+                    TOPIC_TELEMETRY,
+                    0
+                ),
+                (
+                    TOPIC_ALERT,
+                    0
+                ),
+                (
+                    TOPIC_STATUS,
+                    0
+                )
+            ]
         )
+
+
+        if result == mqtt.MQTT_ERR_SUCCESS:
+
+            log.info(
+                "Abonné à : %s | %s | %s",
+                TOPIC_TELEMETRY,
+                TOPIC_ALERT,
+                TOPIC_STATUS
+            )
+
+        else:
+
+            log.error(
+                "Erreur lors des abonnements MQTT : %s",
+                result
+            )
 
     else:
 
@@ -398,7 +458,8 @@ def on_connect(
 
 
 # =====================================================
-# CALLBACK MQTT : DÉCONNEXION
+# CALLBACK MQTT
+# DÉCONNEXION
 # =====================================================
 
 def on_disconnect(
@@ -417,13 +478,14 @@ def on_disconnect(
 
 
 # =====================================================
-# CALLBACK MQTT : MESSAGE
+# CALLBACK MQTT
+# RÉCEPTION D'UN MESSAGE
 # =====================================================
 
 def on_message(
     client,
     userdata,
-    msg
+    message
 ):
 
     # ================================================
@@ -431,14 +493,14 @@ def on_message(
     # ================================================
 
     id_appareil, kind = parse_topic(
-        msg.topic
+        message.topic
     )
 
     if id_appareil is None:
 
         log.warning(
             "Topic inattendu ignoré : %s",
-            msg.topic
+            message.topic
         )
 
         return
@@ -448,14 +510,14 @@ def on_message(
     # LECTURE DU PAYLOAD
     # ================================================
 
-    raw = msg.payload.decode(
+    raw = message.payload.decode(
         "utf-8",
         errors="replace"
     ).strip()
 
 
     # ================================================
-    # JSON
+    # CONVERSION JSON
     # ================================================
 
     try:
@@ -468,7 +530,7 @@ def on_message(
             "[%s] Payload non-JSON ignoré "
             "sur %s : %s",
             id_appareil,
-            msg.topic,
+            message.topic,
             raw
         )
 
@@ -522,7 +584,7 @@ def on_message(
 
 
 # =====================================================
-# FLASK
+# APPLICATION FLASK
 # =====================================================
 
 flask_app = Flask(
@@ -530,13 +592,17 @@ flask_app = Flask(
 )
 
 
+# Référence globale du client MQTT.
+# Elle est utilisée par /commande.
+
 mqtt_client_ref = {
     "client": None
 }
 
 
 # =====================================================
-# HTTP -> MQTT : /commande
+# HTTP -> MQTT
+# ENDPOINT /COMMANDE
 # =====================================================
 
 @flask_app.route(
@@ -549,10 +615,13 @@ def recevoir_commande():
     # AUTHENTIFICATION
     # ================================================
 
+    received_api_key = request.headers.get(
+        "X-API-Key"
+    )
+
     if (
         not BRIDGE_API_KEY
-        or request.headers.get("X-API-Key")
-        != BRIDGE_API_KEY
+        or received_api_key != BRIDGE_API_KEY
     ):
 
         return jsonify({
@@ -561,7 +630,7 @@ def recevoir_commande():
 
 
     # ================================================
-    # JSON
+    # RÉCUPÉRATION DU JSON
     # ================================================
 
     data = request.get_json(
@@ -630,7 +699,9 @@ def recevoir_commande():
     # CLIENT MQTT
     # ================================================
 
-    client = mqtt_client_ref["client"]
+    client = mqtt_client_ref.get(
+        "client"
+    )
 
 
     if (
@@ -652,7 +723,7 @@ def recevoir_commande():
 
 
     # ================================================
-    # PUBLICATION MQTT
+    # TOPIC DE COMMANDE
     # ================================================
 
     topic = TOPIC_COMMAND_TEMPLATE.format(
@@ -660,13 +731,21 @@ def recevoir_commande():
     )
 
 
+    # ================================================
+    # PUBLICATION MQTT
+    # ================================================
+
     result = client.publish(
         topic,
-        json.dumps(data)
+        json.dumps(data),
+        qos=1
     )
 
 
-    # Vérification du résultat de publication.
+    # ================================================
+    # VÉRIFICATION DE LA PUBLICATION
+    # ================================================
+
     if result.rc != mqtt.MQTT_ERR_SUCCESS:
 
         log.error(
@@ -684,6 +763,10 @@ def recevoir_commande():
         }), 502
 
 
+    # ================================================
+    # LOG
+    # ================================================
+
     log.info(
         "[%s] Commande republiée sur %s : %s",
         id_appareil,
@@ -691,6 +774,10 @@ def recevoir_commande():
         data
     )
 
+
+    # ================================================
+    # RÉPONSE
+    # ================================================
 
     return jsonify({
         "statut":
@@ -728,9 +815,13 @@ def run_flask():
 def main():
 
     log.info(
-        "=== SHANGO Bridge MQTT <-> HTTP v2.4 ==="
+        "=== SHANGO Bridge MQTT <-> HTTP v2.5 ==="
     )
 
+
+    # ================================================
+    # INFORMATIONS DE CONFIGURATION
+    # ================================================
 
     log.info(
         "Broker MQTT : %s:%s (sans TLS)",
@@ -738,6 +829,10 @@ def main():
         MQTT_PORT
     )
 
+    log.info(
+        "Client MQTT : %s",
+        MQTT_CLIENT_ID
+    )
 
     log.info(
         "API Laravel : %s",
@@ -746,13 +841,14 @@ def main():
 
 
     # ================================================
-    # VÉRIFICATION CLÉ API LARAVEL
+    # VÉRIFICATION CLÉ LARAVEL
     # ================================================
 
     if API_TOKEN:
 
         log.info(
-            "Auth API (vers Laravel) : X-API-Key configurée"
+            "Auth API (vers Laravel) : "
+            "X-API-Key configurée"
         )
 
     else:
@@ -791,6 +887,10 @@ def main():
         )
 
 
+    # ================================================
+    # ENDPOINT BRIDGE
+    # ================================================
+
     log.info(
         "Endpoint commande : "
         "POST http://<ce-host>:%s/commande",
@@ -799,15 +899,19 @@ def main():
 
 
     # ================================================
-    # CLIENT MQTT
+    # CRÉATION DU CLIENT MQTT
     # ================================================
 
     client = mqtt.Client(
         client_id=MQTT_CLIENT_ID,
         callback_api_version=
-            mqtt.CallbackAPIVersion.VERSION2,
+            mqtt.CallbackAPIVersion.VERSION2
     )
 
+
+    # ================================================
+    # CALLBACKS MQTT
+    # ================================================
 
     client.on_connect = on_connect
 
@@ -816,22 +920,49 @@ def main():
     client.on_message = on_message
 
 
-    mqtt_client_ref["client"] = client
-
-
     # ================================================
-    # CONNEXION BROKER
+    # CONFIGURATION DE LA RECONNEXION
     # ================================================
 
-    client.connect(
-        MQTT_BROKER,
-        MQTT_PORT,
-        keepalive=60
+    client.reconnect_delay_set(
+        min_delay=1,
+        max_delay=30
     )
 
 
     # ================================================
-    # SERVEUR FLASK
+    # RÉFÉRENCE DU CLIENT MQTT
+    # ================================================
+
+    mqtt_client_ref["client"] = client
+
+
+    # ================================================
+    # CONNEXION AU BROKER
+    # ================================================
+
+    try:
+
+        client.connect(
+            MQTT_BROKER,
+            MQTT_PORT,
+            keepalive=60
+        )
+
+    except Exception as error:
+
+        log.error(
+            "Impossible de se connecter au broker MQTT : %s",
+            error
+        )
+
+        log.info(
+            "Le Bridge va tenter une reconnexion automatique..."
+        )
+
+
+    # ================================================
+    # DÉMARRAGE DU SERVEUR FLASK
     # ================================================
 
     flask_thread = threading.Thread(
@@ -846,9 +977,31 @@ def main():
     # BOUCLE MQTT
     # ================================================
 
-    client.loop_forever(
-        retry_first_connection=True
-    )
+    try:
+
+        client.loop_forever(
+            retry_first_connection=True
+        )
+
+    except KeyboardInterrupt:
+
+        log.info(
+            "Arrêt du Bridge demandé."
+        )
+
+    finally:
+
+        try:
+
+            client.disconnect()
+
+        except Exception:
+
+            pass
+
+        log.info(
+            "Bridge arrêté."
+        )
 
 
 # =====================================================
