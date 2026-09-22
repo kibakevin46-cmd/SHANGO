@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 
 class Equipement extends Model
@@ -76,5 +77,13 @@ class Equipement extends Model
     public function alertes(): HasMany
     {
         return $this->hasMany(Alerte::class);
+    }
+
+    /**
+     * Identifiants IoT associés à l'équipement.
+     */
+    public function iotCredential(): HasOne
+    {
+        return $this->hasOne(IotCredential::class);
     }
 }
