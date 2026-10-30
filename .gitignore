@@ -49,3 +49,6 @@ build.log
 build.err
 serve.log
 serve.err
+
+# Temporary clone for pushing frontend
+SHANGO_remote_check/
